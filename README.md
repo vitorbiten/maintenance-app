@@ -181,11 +181,13 @@ maintenance_worker    | 2023/01/29 23:11:16  [*] Waiting for messages.
 ```
 
 This means that the API connected to the mysql server and the worker connected to the rabbitmq server.
-You can manage the mysql database on the included phpmyadmin at http://localhost:9090/. As example the seed users table:
+You can manage the mysql database on the included phpmyadmin at http://localhost:9090/ As example the seed users table:
 
 <div align="center">
   <img src="https://user-images.githubusercontent.com/31265908/215361322-666a6c1c-0c0d-488c-9c49-4064389ddaaf.png" alt="PHPAdmin"/>
 </div>
+
+If you wanna keep the database contents, disable the seed line at the API's [main.go](/api/app/main.go.yml) file.
 
 To stop the running containers:
 
@@ -229,10 +231,17 @@ You can run performance tests on the api using [k6](https://github.com/grafana/k
 ```shell
 make perf
 ```
+
 Here are the results for my local run:
 
 <div align="center">
   <img src="https://user-images.githubusercontent.com/31265908/215403690-d93d2f7e-3b3a-40d1-9816-2cf63d028292.png" alt="Coverage report"/>
+</div>
+
+You can also watch the tests live on grafana, just access http://localhost:3000/d/k6/k6-load-testing-results:
+
+<div align="center">
+  <img src="https://user-images.githubusercontent.com/31265908/215407972-81690ad0-bdd8-4bf7-8432-81d8619db805.png" alt="Coverage report"/>
 </div>
 
 ## 📖 Docs
@@ -367,6 +376,8 @@ On a new tag created, it builds the image using this tag, pushes it to Dockerhub
 ### Check out the production api [here!](http://139.144.159.246/)
 
 # 🗺 Repository Visualization	
-![image](https://user-images.githubusercontent.com/31265908/215365812-302b3cc1-cfe3-4e5a-82dd-7c5ba0a453dd.png)
+<div align="center">
+  <img src="https://user-images.githubusercontent.com/31265908/215409850-c87598f1-a273-4b69-a619-b3792293d086.png" alt="Repository Visualization"/>
+</div>
 
 **[⬆ back to top](#contents)**

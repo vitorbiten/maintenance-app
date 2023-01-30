@@ -266,13 +266,13 @@ The project uses [minikube](https://github.com/kubernetes/minikube) as a local k
 make deploy
 ```
 
-It will apply first these external configs:
+It will start minikube, connect the Docker CLI to the docker daemon inside the minikube VM, then firt kubectl apply these external configs:
 
 - [Kubernetes Dashboard](https://kubernetes.io/docs/tasks/access-application-cluster/web-ui-dashboard/)
 - [Local Path Provisioner](https://github.com/rancher/local-path-provisioner)
 - [RabbitMQ Cluster Operator](https://www.rabbitmq.com/kubernetes/operator/operator-overview.html)
 
-Then build the images, connect the Docker CLI to the docker daemon inside the minikube VM, and apply these files in the kubernetes folder:
+Then build the images and kubectl apply these files in the kubernetes folder:
 
 - Dashboard (kubernetes-dashboard.yaml)
   - Service Account
@@ -331,7 +331,7 @@ The deployment is divided into 3 Github Actions:
 
 The first action "Deploy K8s" ([deploy-k8s.yml](/.github/workflows/deploy-k8s.yml)) uses Azure/k8s-set-context@v3 to set cluster context 
 with KUBE_CONFIG before running kubectl commands. 
-For our deploy production deploy we don't need to run kubernetes-dashboard because it comes pre-installed on the Linode cluster, we will apply this extra file:
+For our deploy production deploy we don't need to run kubernetes-dashboard because it comes pre-installed on the Linode cluster, we will kubectl apply this extra file:
 
 - Linode Service (load-balancer.yaml)
   - LoadBalancer

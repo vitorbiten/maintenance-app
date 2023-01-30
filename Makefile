@@ -29,6 +29,10 @@ coverage: ## Run tests and open coverage report of the project
 	open ./api/cover.html
 	docker-compose -f docker-compose.test.yml -p test down
 
+perf: ## Run performance tests
+	docker-compose -f ./load/docker-compose.k6.yaml up -d 
+	docker-compose -f ./load/docker-compose.k6.yaml run k6 run /scripts/k6.js 
+
 ## Docs:
 swagger: ## Generates api docs
 	swag init -d api/app/ -o api/app/docs

@@ -46,7 +46,7 @@ jobs:
           kubeconfig: ${{ secrets.KUBE_CONFIG }}
       - name: Kubernetes apply
         run: |
-          sed -i'' -e 's,/maintenance-api,/maintenance-api:${{github.ref_name}},g' ./kubernetes/api-deployment.yaml
-          kubectl apply -f ./kubernetes/api-deployment.yaml
-          sed -i'' -e 's,/maintenance-api,/maintenance-api:${{github.ref_name}},g' ./kubernetes/worker-deployment.yaml
-          kubectl apply -f ./kubernetes/worker-deployment.yaml
+          sed -i'' -e 's,/maintenance-api,/maintenance-api:${{github.ref_name}},g' ./kubernetes/api.yaml
+          kubectl apply -f ./kubernetes/api.yaml
+          sed -i'' -e 's,/maintenance-api,/maintenance-api:${{github.ref_name}},g' ./kubernetes/worker.yaml
+          kubectl apply -f ./kubernetes/worker.yaml

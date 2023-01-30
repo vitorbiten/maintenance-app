@@ -1,12 +1,14 @@
 import http from 'k6/http';
-import { check, group, sleep, fail } from 'k6';
+import { check, group, sleep } from 'k6';
 
 export const options = {
-  stages: [{ target: 70, duration: '30s' }],
+  stages: [{ target: 50, duration: '30s' }, { target: 200, duration: '30s' }],
   thresholds: {
     'http_req_duration': ['p(95)<500', 'p(99)<1500'],
-    'http_req_duration{name:PublicTasks}': ['avg<400'],
     'http_req_duration{name:Create}': ['avg<600', 'max<1000'],
+    'http_req_duration{name:Update}': ['avg<600', 'max<1000'],
+    'http_req_duration{name:Get}': ['avg<600', 'max<1000'],
+    'http_req_duration{name:Delete}': ['avg<600', 'max<1000'],
   },
 };
 
@@ -31,7 +33,7 @@ export function setup() {
     "password": PASSWORD,
   }));
 
-  check(res, { 'created user': (r) => r.status === 201 });
+  check(res, { 'create user': (r) => r.status === 201 });
 
   const techLoginRes = http.post(`${BASE_URL}/login`, JSON.stringify({
     "email": EMAIL,
@@ -39,7 +41,7 @@ export function setup() {
   }));
 
   const techAuthToken = techLoginRes.json();
-  check(techAuthToken, { 'logged in successfully': () => techAuthToken !== '' });
+  check(techAuthToken, { 'login successfully': () => techAuthToken !== '' });
 
   const managerLoginRes = http.post(`${BASE_URL}/login`, JSON.stringify({
     "email": "luther@gmail.com",
@@ -47,7 +49,7 @@ export function setup() {
   }));
 
   const managerAuthToken = managerLoginRes.json();
-  check(managerAuthToken, { 'logged in successfully': () => managerAuthToken !== '' });
+  check(managerAuthToken, { 'login successfully': () => managerAuthToken !== '' });
 
   return {techAuthToken, managerAuthToken};
 }
@@ -90,10 +92,10 @@ export default (tokens) => {
 
       const res = http.post(URL, payload, requestConfigWithTechAuthToken({ name: 'Create' }));
 
-      if (check(res, { 'Task created correctly': (r) => r.status === 201 })) {
+      if (check(res, { 'tasks created correctly': (r) => r.status === 201 })) {
         URL = `${URL}/${res.json('id')}`;
       } else {
-        console.log(`Unable to create a Task ${res.status} ${res.body}`);
+        console.log(`unable to create a Task ${res.status} ${res.body}`);
         return;
       }
     });
@@ -106,26 +108,40 @@ export default (tokens) => {
       })
       const res = http.put(URL, payload, requestConfigWithTechAuthToken({ name: 'Update' }));
       const isSuccessfulUpdate = check(res, {
-        'Update worked': () => res.status === 200,
-        'Updated name is correct': () => res.json('summary') === new_summary,
+        'updates worked': () => res.status === 200,
+        'updated names were correct': () => res.json('summary') === new_summary,
       });
 
       if (!isSuccessfulUpdate) {
-        console.log(`Unable to update the task ${res.status} ${res.body}`);
+        console.log(`unable to update the task ${res.status} ${res.body}`);
         return;
       }
     });
 
-    const delRes = http.del(URL, null, requestConfigWithManagerAuthToken({ name: 'Delete' }));
+    group('Get task', () => {
+      const res = http.get(URL, requestConfigWithTechAuthToken({ name: 'Get' }));
+      const isSuccessfulUpdate = check(res, {
+        'get task worked': () => res.status === 200
+      });
 
-    const isSuccessfulDelete = check(null, {
-      'Task was deleted correctly': () => delRes.status === 204,
+      if (!isSuccessfulUpdate) {
+        console.log(`unable to get the task ${res.status} ${res.body}`);
+        return;
+      }
     });
 
-    if (!isSuccessfulDelete) {
-      console.log(`Unable to delete the task ${delRes.status} ${delRes.body}`);
-      return;
-    }
+    group('Delete task', () => {
+      const delRes = http.del(URL, null, requestConfigWithManagerAuthToken({ name: 'Delete' }));
+
+      const isSuccessfulDelete = check(delRes, {
+        'task was deleted correctly': () => delRes.status === 204,
+      });
+
+      if (!isSuccessfulDelete) {
+        console.log(`unable to delete the task ${delRes.status} ${delRes.body}`);
+        return;
+      }
+    });
   });
 
   sleep(1);

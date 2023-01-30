@@ -34,13 +34,13 @@ swagger: ## Generates api docs
 	swag init -d api/app/ -o api/app/docs
 
 ## Kubernetes:
-deploy: ## Starts minikube and deploys the app
+deploy: ## Starts minikube and eploys the app
 	minikube start
+	$(eval $(minikube -p minikube docker-env))
 	kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml
 	kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/master/deploy/local-path-storage.yaml
 	kubectl apply -f https://github.com/rabbitmq/cluster-operator/releases/latest/download/cluster-operator.yml
 	kubectl apply -f kubernetes/kubernetes-dashboard.yaml
-	@eval $(minikube docker-env)
 	docker build . -t vitorbiten/maintenance-api
 	sed -i'' -e 's/Always/Never/g' ./kubernetes/api.yaml
 	kubectl apply -f kubernetes/api.yaml

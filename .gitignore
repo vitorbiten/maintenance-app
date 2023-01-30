@@ -1,0 +1,8 @@
+*.test
+.env
+cover.out
+cover.html
+api/tmp/
+worker/tmp/
+kubernetes/secrets.yaml
+go.work.sum

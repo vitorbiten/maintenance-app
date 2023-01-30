@@ -1,0 +1,24 @@
+apiVersion: rabbitmq.com/v1beta1
+kind: RabbitmqCluster
+metadata:
+  name: rabbitmq
+spec:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 400m
+      memory: 512Mi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rabbitmq-default-user
+stringData:
+  default_user.conf: |
+    default_user = user
+    default_pass = guest
+  username: user
+  password: guest

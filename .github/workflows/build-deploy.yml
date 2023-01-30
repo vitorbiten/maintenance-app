@@ -48,5 +48,5 @@ jobs:
         run: |
           sed -i'' -e 's,/maintenance-api,/maintenance-api:${{github.ref_name}},g' ./kubernetes/api.yaml
           kubectl apply -f ./kubernetes/api.yaml
-          sed -i'' -e 's,/maintenance-api,/maintenance-api:${{github.ref_name}},g' ./kubernetes/worker.yaml
+          sed -i'' -e 's,/maintenance-worker,/maintenance-worker:${{github.ref_name}},g' ./kubernetes/worker.yaml
           kubectl apply -f ./kubernetes/worker.yaml

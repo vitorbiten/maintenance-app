@@ -45,6 +45,7 @@ getting notified when new ones arrive. I hope you like it!
   - [Run](#%EF%B8%8F-run)
   - [Code Linting](#-code-linting)
   - [Tests and Coverage](#-tests-and-coverage)
+  - [Performance Test](#-performance-test)
   - [Docs](#-docs)
   - [Kubernetes](#-kubernetes)
 - [Deployment](#deployment)
@@ -228,6 +229,19 @@ The cover report html page will be opened:
 
 <div align="center">
   <img src="https://user-images.githubusercontent.com/31265908/215358478-04a741f1-865c-4d74-b721-7fdd6865d0f2.png" alt="Coverage report"/>
+</div>
+
+## 📖 Performance Test
+
+You can run performance tests on the api using [k6](https://github.com/grafana/k6) with the command:
+
+```shell
+make perf
+```
+Here are the results for my local run:
+
+<div align="center">
+  <img src="https://user-images.githubusercontent.com/31265908/215403690-d93d2f7e-3b3a-40d1-9816-2cf63d028292.png" alt="Coverage report"/>
 </div>
 
 ## 📖 Docs

@@ -6,7 +6,7 @@ env: ## Copies .env.example files
 	cp kubernetes/secrets-example.yaml kubernetes/secrets.yaml
 
 run: ## Starts development server with hot-reload
-	docker-compose -p dev up --build  -d
+	docker-compose -p dev up --build --abort-on-container-exit
 
 stop: ## Stops all containers
 	docker-compose -p dev down --volumes
@@ -30,9 +30,8 @@ coverage: ## Run tests and open coverage report of the project
 	docker-compose -f docker-compose.test.yml -p test down
 
 perf: ## Run performance tests
-	docker-compose -f ./load/docker-compose.k6.yaml up -d 
-	open http://localhost:3000/d/k6/k6-load-testing-results
-	docker-compose -f ./load/docker-compose.k6.yaml run k6 run /scripts/k6.js 
+	docker-compose -f ./load/docker-compose.yaml up -d 
+	docker-compose -f ./load/docker-compose.yaml run k6 run /scripts/k6.js 
 
 ## Docs:
 swagger: ## Generates api docs

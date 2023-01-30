@@ -2,7 +2,7 @@ import http from 'k6/http';
 import { check, group, sleep } from 'k6';
 
 export const options = {
-  stages: [{ target: 50, duration: '30s' }, { target: 200, duration: '30s' }],
+  stages: [{ target: 50, duration: '30s' }, { target: 200, duration: '30s' }, { target: 1000, duration: '30s' }],
   thresholds: {
     'http_req_duration': ['p(95)<500', 'p(99)<1500'],
     'http_req_duration{name:Create}': ['avg<600', 'max<1000'],

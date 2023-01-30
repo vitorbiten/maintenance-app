@@ -79,17 +79,17 @@ func TestCreateTask(t *testing.T) {
 			errorMessage: "unauthorized",
 		},
 		{
-			// When no token is passed
-			inputJSON:    `{"summary": "the summary"}`,
-			statusCode:   401,
-			tokenGiven:   "",
-			errorMessage: "unauthorized",
-		},
-		{
 			// When incorrect token is passed
 			inputJSON:    `{"summary": "the summary"}`,
 			statusCode:   401,
 			tokenGiven:   "This is an incorrect token",
+			errorMessage: "unauthorized",
+		},
+		{
+			// When no token is passed
+			inputJSON:    `{"summary": "the summary"}`,
+			statusCode:   401,
+			tokenGiven:   "",
 			errorMessage: "unauthorized",
 		},
 	}
@@ -165,15 +165,15 @@ func TestGetTasks(t *testing.T) {
 			errorMessage: "",
 		},
 		{
-			// When no token is passed
-			statusCode:   401,
-			tokenGiven:   "",
-			errorMessage: "unauthorized",
-		},
-		{
 			// When incorrect token is passed
 			statusCode:   401,
 			tokenGiven:   "This is an incorrect token",
+			errorMessage: "unauthorized",
+		},
+		{
+			// When no token is passed
+			statusCode:   401,
+			tokenGiven:   "",
 			errorMessage: "unauthorized",
 		},
 	}
@@ -272,6 +272,13 @@ func TestFindTaskByID(t *testing.T) {
 			errorMessage: "Bad Request",
 		},
 		{
+			// When incorrect token is passed
+			id:           strconv.Itoa(int(secondTechnicianTask.ID)),
+			statusCode:   401,
+			tokenGiven:   "This is an incorrect token",
+			errorMessage: "unauthorized",
+		},
+		{
 			// When no token is passed
 			id:           strconv.Itoa(int(secondTechnicianTask.ID)),
 			statusCode:   401,
@@ -279,11 +286,8 @@ func TestFindTaskByID(t *testing.T) {
 			errorMessage: "unauthorized",
 		},
 		{
-			// When incorrect token is passed
-			id:           strconv.Itoa(int(secondTechnicianTask.ID)),
-			statusCode:   401,
-			tokenGiven:   "This is an incorrect token",
-			errorMessage: "unauthorized",
+			id:         "unknwon",
+			statusCode: 400,
 		},
 	}
 	for _, v := range samples {
@@ -357,6 +361,13 @@ func TestUpdateTask(t *testing.T) {
 			tokenGiven:   technicianTokenString,
 			statusCode:   422,
 			errorMessage: "required summary",
+		},
+		{
+			id:           strconv.Itoa(int(999)),
+			updateJSON:   `{"summary": ""}`,
+			tokenGiven:   technicianTokenString,
+			statusCode:   500,
+			errorMessage: "task not found",
 		},
 		{
 			// When manager token is provided

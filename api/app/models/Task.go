@@ -42,7 +42,7 @@ func (t *Task) Prepare() error {
 	t.ID = 0
 	err := utils.Encrypt(&t.Summary)
 	if err != nil {
-		return errors.New("error processing summary")
+		return err
 	}
 	now := time.Now()
 	if t.Date.IsZero() {

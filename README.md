@@ -15,19 +15,10 @@
   </a>
 </p>
 <p align="center">
-  <img src="https://img.shields.io/github/languages/code-size/vitorbiten/maintenance-app" alt="GitHub code size in bytes">
-  <a href="https://github.com/vitorbiten/maintenance-app/issues">
-    <img src="https://img.shields.io/github/issues/vitorbiten/maintenance-app" alt="GitHub issues">
-  </a>
+  <img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat" alt="License MIT">
   <a href="https://github.com/vitorbiten/maintenance-app/tags">
     <img src="https://img.shields.io/github/v/tag/vitorbiten/maintenance-app.svg?style=flat" alt="GitHub Tag">
   </a>
-</p>
-<p align="center">
-  <a href="https://snyk.io/test/github/vitorbiten/maintenance-app">
-    <img src="https://snyk.io/test/github/vitorbiten/maintenance-app/badge.svg?style=flat" alt="Snyk Vulnerabilities">
-  </a>
-   <img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat" alt="License MIT">
 </p>
 
 This app was created and deployed in a week to showcase [my](https://www.linkedin.com/in/vitorbiten/) back-end skills.

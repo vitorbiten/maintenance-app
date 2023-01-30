@@ -139,7 +139,7 @@ Users need to be authenticated to perform actions, the api comes with basic user
   
 # Local development
 
-To get a top level view of the local development environment check [Makefile](/Makefile) or run:
+To get a top level view of the local development environment check out the [Makefile](/Makefile) or run:
 
 ```shell
 make help
@@ -165,7 +165,7 @@ First run this command to create the .env files from the .env.examples:
 make env
 ```
 
-To start the development servers with docker-compose run:
+Then, run this command to start the development servers with docker-compose:
 
 ```shell
 make run
@@ -180,8 +180,11 @@ maintenance_worker    | 2023/01/29 23:11:16 -------------- Maintenance Worker --
 maintenance_worker    | 2023/01/29 23:11:16  [*] Waiting for messages.
 ```
 
-This means that the API connected to the mysql server and the worker connected to the rabbitmq server.
-You can manage the mysql database on the included phpmyadmin at http://localhost:9090/ As example the seed users table:
+This means the API has connected to the mysql db and the worker connected to the rabbitmq server.
+
+You can manage the mysql database on the included phpmyadmin at http://localhost:9090/ and rabbitmq http://localhost:15672/ (guest:guest).
+
+This is how the db is initially seeded:
 
 <div align="center">
   <img src="https://user-images.githubusercontent.com/31265908/215361322-666a6c1c-0c0d-488c-9c49-4064389ddaaf.png" alt="PHPAdmin"/>
@@ -206,13 +209,13 @@ npm run lint
 
 ## 🧪 Tests and coverage
 
-For running the test suite, use the command:
+To run the test suite, use the command:
 
 ```shell
 make test
 ```
 
-You can request a coverage report by running the command:
+You can request a coverage report with:
 
 ```shell
 make coverage
@@ -238,7 +241,7 @@ Here are the results for my local run:
   <img src="https://user-images.githubusercontent.com/31265908/215403690-d93d2f7e-3b3a-40d1-9816-2cf63d028292.png" alt="Coverage report"/>
 </div>
 
-You can also watch the tests live on grafana, just access http://localhost:3000/d/k6/k6-load-testing-results:
+You can also watch the tests live on grafana at http://localhost:3000/d/k6/k6-load-testing-results:
 
 <div align="center">
   <img src="https://user-images.githubusercontent.com/31265908/215407972-81690ad0-bdd8-4bf7-8432-81d8619db805.png" alt="Coverage report"/>
@@ -280,7 +283,7 @@ The project uses [minikube](https://github.com/kubernetes/minikube) as a local k
 make deploy
 ```
 
-It will start minikube, connect the Docker CLI to the docker daemon inside the minikube VM, then firt kubectl apply these external configs:
+It will start minikube, connect the Docker CLI to the docker daemon inside the minikube VM, then kubectl apply these external configs:
 
 - [Kubernetes Dashboard](https://kubernetes.io/docs/tasks/access-application-cluster/web-ui-dashboard/)
 - [Local Path Provisioner](https://github.com/rancher/local-path-provisioner)
@@ -344,13 +347,13 @@ The deployment is divided into 3 Github Actions:
 ## 🔨 Setup
 
 The first action "Deploy K8s" ([deploy-k8s.yml](/.github/workflows/deploy-k8s.yml)) uses Azure/k8s-set-context@v3 to set cluster context 
-with KUBE_CONFIG before running kubectl commands. 
-For our deploy production deploy we don't need to run kubernetes-dashboard because it comes pre-installed on the Linode cluster, we will kubectl apply this extra file:
+with KUBE_CONFIG before running kubectl commands deploying the base services.
+For our production deploy we don't need to run kubernetes-dashboard because it comes pre-installed on the Linode cluster, we will kubectl apply this extra file:
 
 - Linode Service (load-balancer.yaml)
   - LoadBalancer
 
-This action needs to be started from a tag version so the last images can be pulled from DockerHub.
+This action needs to be triggered manually and be ran from a tag version so the correct images can be pulled from DockerHub.
 
 ## 🚥 CI
 
@@ -361,7 +364,7 @@ The second action "Lint, Test and Tag" ([lint-test-tag.yml](/.github/workflows/l
 </div>
 
 It runs the lint, tests suite, and then in case of a push/merge to main, [Github Tag Action](https://github.com/anothrNick/github-tag-action) bumps 
-the version using #major, #minor (default), #patch or #none tags in the commit message, the last step is to create the tag, triggering the CD step.
+the version using #major, #minor (default), #patch or #none tags in the commit message. After the bump a tag is created, triggering the Build and Deploy workflow.
 
 ## ☁ CD	
 
@@ -371,7 +374,7 @@ The third action "Build and Deploy" ([build-deploy.yml](/.github/workflows/build
   <img src="https://user-images.githubusercontent.com/31265908/215362806-b5dffc9d-1f10-47c3-8f8f-9cf3aec20f15.png" alt="Build and Deploy"/>
 </div>
 
-On a new tag created, it builds the image using this tag, pushes it to Dockerhub and applies the deployment on the cluster.
+On a new tag created, it builds the image using this tag, pushes it to Dockerhub and applies the new deployment on the cluster.
 
 ### Check out the production api [here!](http://139.144.159.246/)
 

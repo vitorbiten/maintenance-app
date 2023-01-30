@@ -26,6 +26,5 @@ jobs:
           sed -i'' -e 's,/maintenance-worker,/maintenance-worker:${{github.ref_name}},g' ./kubernetes/worker.yaml
           kubectl apply -f ./kubernetes/worker.yaml
           kubectl apply -f ./kubernetes/mysql.yaml
-          kubectl apply -f ./kubernetes/secrets.yaml
           kubectl apply -f ./kubernetes/rabbitmq.yaml
 

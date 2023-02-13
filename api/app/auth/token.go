@@ -11,7 +11,7 @@ import (
 	jwt "github.com/golang-jwt/jwt/v4"
 )
 
-func CreateToken(user_id uint32) (string, error) {
+func CreateToken(user_id uint64) (string, error) {
 	tokenExpirationMinutes, err := time.ParseDuration(os.Getenv("TOKEN_EXP_MINUTES"))
 	if err != nil {
 		tokenExpirationMinutes = 60
@@ -37,7 +37,7 @@ func ExtractToken(request *http.Request) string {
 	return ""
 }
 
-func ExtractTokenID(request *http.Request) (uint32, error) {
+func ExtractTokenID(request *http.Request) (uint64, error) {
 	tokenString := ExtractToken(request)
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -50,11 +50,11 @@ func ExtractTokenID(request *http.Request) (uint32, error) {
 	}
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if ok && token.Valid {
-		uid, err := strconv.ParseUint(fmt.Sprintf("%.0f", claims["user_id"]), 10, 32)
+		uid, err := strconv.ParseUint(fmt.Sprintf("%.0f", claims["user_id"]), 10, 64)
 		if err != nil {
 			return 0, err
 		}
-		return uint32(uid), nil
+		return uid, nil
 	}
 	return 0, nil
 }

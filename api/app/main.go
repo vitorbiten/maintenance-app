@@ -5,20 +5,51 @@ import (
 	"log"
 	"os"
 
-	_ "github.com/joho/godotenv/autoload"
+	"github.com/gin-gonic/gin"
+	"github.com/vitorbiten/maintenance/api/app/adapters"
 	"github.com/vitorbiten/maintenance/api/app/controllers"
-	"github.com/vitorbiten/maintenance/api/app/seed"
+	"golang.org/x/sync/errgroup"
+
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/joho/godotenv/autoload"
+
+	"context"
+	"net/http"
+	"os/signal"
+	"syscall"
 )
 
-var server = controllers.Server{}
+func serveApplication() {
+	mainCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-func main() {
-	server.Initialize(os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_PORT"), os.Getenv("DB_HOST"), os.Getenv("DB_NAME"))
-	seed.Load(server.DB)
+	router := gin.Default()
+	controllers.InitializeRoutes(router)
 
 	apiPort := fmt.Sprintf(":%s", os.Getenv("API_PORT"))
-	log.Println("--------------- Maintenance API ---------------")
-	log.Printf("Listening to port %s\n", apiPort)
+	server := &http.Server{
+		Addr:    apiPort,
+		Handler: router,
+	}
 
-	server.Run(apiPort)
+	g, gCtx := errgroup.WithContext(mainCtx)
+	g.Go(func() error {
+		log.Printf("Listening to port %s\n", apiPort)
+		return server.ListenAndServe()
+	})
+	g.Go(func() error {
+		<-gCtx.Done()
+		log.Println("Shutting down server...")
+		return server.Shutdown(context.Background())
+	})
+
+	if err := g.Wait(); err != nil {
+		log.Printf("Exit reason: %s \n", err)
+	}
+}
+
+func main() {
+	adapters.LoadDatabase()
+	//seed.Load(adapters.DB)
+	serveApplication()
 }

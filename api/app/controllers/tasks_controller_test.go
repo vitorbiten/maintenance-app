@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/gorilla/mux"
 	rabbitmqAdapter "github.com/vitorbiten/maintenance/api/app/adapters"
 	"github.com/vitorbiten/maintenance/api/app/models"
 	"github.com/vitorbiten/maintenance/api/app/utils"
@@ -17,16 +16,16 @@ import (
 )
 
 func TestCreateTask(t *testing.T) {
-	err := RefreshUserAndTaskTable()
+	err := RefreshTables()
 	OnError(err, "Error refreshing users table")
 	users, err := SeedUsers()
 	OnError(err, fmt.Sprintf("Error seeding user: %v\n", err))
 	managerUser := users[0]
 	technicianUser := users[2]
-	managerToken, err := server.SignIn(managerUser.Email, "password")
+	managerToken, err := SignIn(managerUser.Email, "password")
 	OnError(err, fmt.Sprintf("Cannot login as manager: %v\n", err))
 	managerTokenString := fmt.Sprintf("Bearer %v", managerToken)
-	technicianToken, err := server.SignIn(technicianUser.Email, "password")
+	technicianToken, err := SignIn(technicianUser.Email, "password")
 	OnError(err, fmt.Sprintf("Cannot login as technician: %v\n", err))
 	technicianTokenString := fmt.Sprintf("Bearer %v", technicianToken)
 
@@ -83,14 +82,14 @@ func TestCreateTask(t *testing.T) {
 			inputJSON:    `{"summary": "the summary"}`,
 			statusCode:   401,
 			tokenGiven:   "This is an incorrect token",
-			errorMessage: "unauthorized",
+			errorMessage: "token contains an invalid number of segments",
 		},
 		{
 			// When no token is passed
 			inputJSON:    `{"summary": "the summary"}`,
 			statusCode:   401,
 			tokenGiven:   "",
-			errorMessage: "unauthorized",
+			errorMessage: "token contains an invalid number of segments",
 		},
 	}
 	for _, v := range samples {
@@ -102,12 +101,13 @@ func TestCreateTask(t *testing.T) {
 			messageController = controller
 			return nil
 		}
+
+		router := SetupRouter()
+		rr := httptest.NewRecorder()
 		req, err := http.NewRequest("POST", "/tasks", bytes.NewBufferString(v.inputJSON))
 		OnError(err, fmt.Sprintf("Error on POST /tasks: %v", err))
-		rr := httptest.NewRecorder()
-		handler := http.HandlerFunc(server.CreateTask)
 		req.Header.Set("Authorization", v.tokenGiven)
-		handler.ServeHTTP(rr, req)
+		router.ServeHTTP(rr, req)
 
 		responseMap := make(map[string]interface{})
 		err = json.Unmarshal(rr.Body.Bytes(), &responseMap)
@@ -131,16 +131,16 @@ func TestCreateTask(t *testing.T) {
 }
 
 func TestGetTasks(t *testing.T) {
-	err := RefreshUserAndTaskTable()
+	err := RefreshTables()
 	OnError(err, "Error refreshing users table")
 	users, _, err := SeedUsersAndTasks()
 	OnError(err, fmt.Sprintf("Error seeding user: %v\n", err))
 	managerUser := users[0]
 	technicianUser := users[2]
-	managerToken, err := server.SignIn(managerUser.Email, "password")
+	managerToken, err := SignIn(managerUser.Email, "password")
 	OnError(err, fmt.Sprintf("Cannot login as manager: %v\n", err))
 	managerTokenString := fmt.Sprintf("Bearer %v", managerToken)
-	technicianToken, err := server.SignIn(technicianUser.Email, "password")
+	technicianToken, err := SignIn(technicianUser.Email, "password")
 	OnError(err, fmt.Sprintf("Cannot login as technician: %v\n", err))
 	technicianTokenString := fmt.Sprintf("Bearer %v", technicianToken)
 
@@ -168,23 +168,23 @@ func TestGetTasks(t *testing.T) {
 			// When incorrect token is passed
 			statusCode:   401,
 			tokenGiven:   "This is an incorrect token",
-			errorMessage: "unauthorized",
+			errorMessage: "token contains an invalid number of segments",
 		},
 		{
 			// When no token is passed
 			statusCode:   401,
 			tokenGiven:   "",
-			errorMessage: "unauthorized",
+			errorMessage: "token contains an invalid number of segments",
 		},
 	}
 
 	for _, v := range samples {
+		router := SetupRouter()
+		rr := httptest.NewRecorder()
 		req, err := http.NewRequest("GET", "/tasks", nil)
 		OnError(err, fmt.Sprintf("Error on GET /tasks: %v", err))
-		rr := httptest.NewRecorder()
-		handler := http.HandlerFunc(server.GetTasks)
 		req.Header.Set("Authorization", v.tokenGiven)
-		handler.ServeHTTP(rr, req)
+		router.ServeHTTP(rr, req)
 
 		assert.Equal(t, rr.Code, v.statusCode)
 		if v.statusCode == 200 {
@@ -204,7 +204,7 @@ func TestGetTasks(t *testing.T) {
 }
 
 func TestFindTaskByID(t *testing.T) {
-	err := RefreshUserAndTaskTable()
+	err := RefreshTables()
 	OnError(err, "Error refreshing users table")
 	users, tasks, err := SeedUsersAndTasks()
 	OnError(err, fmt.Sprintf("Error seeding user: %v\n", err))
@@ -216,10 +216,10 @@ func TestFindTaskByID(t *testing.T) {
 	secondTechnicianTask := tasks[1]
 	err = utils.Decrypt(&secondTechnicianTask.Summary)
 	OnError(err, fmt.Sprintf("Cannot decrypt summary: %v", err))
-	managerToken, err := server.SignIn(managerUser.Email, "password")
+	managerToken, err := SignIn(managerUser.Email, "password")
 	OnError(err, fmt.Sprintf("Cannot login as manager: %v\n", err))
 	managerTokenString := fmt.Sprintf("Bearer %v", managerToken)
-	technicianToken, err := server.SignIn(technicianUser.Email, "password")
+	technicianToken, err := SignIn(technicianUser.Email, "password")
 	OnError(err, fmt.Sprintf("Cannot login as technician: %v\n", err))
 	technicianTokenString := fmt.Sprintf("Bearer %v", technicianToken)
 
@@ -228,7 +228,7 @@ func TestFindTaskByID(t *testing.T) {
 		statusCode   int
 		tokenGiven   string
 		summary      string
-		author_id    uint32
+		author_id    uint64
 		errorMessage string
 	}{
 		{
@@ -266,24 +266,18 @@ func TestFindTaskByID(t *testing.T) {
 			errorMessage: "task not found",
 		},
 		{
-			// When no id is passed
-			statusCode:   400,
-			tokenGiven:   managerTokenString,
-			errorMessage: "Bad Request",
-		},
-		{
 			// When incorrect token is passed
 			id:           strconv.Itoa(int(secondTechnicianTask.ID)),
 			statusCode:   401,
 			tokenGiven:   "This is an incorrect token",
-			errorMessage: "unauthorized",
+			errorMessage: "token contains an invalid number of segments",
 		},
 		{
 			// When no token is passed
 			id:           strconv.Itoa(int(secondTechnicianTask.ID)),
 			statusCode:   401,
 			tokenGiven:   "",
-			errorMessage: "unauthorized",
+			errorMessage: "token contains an invalid number of segments",
 		},
 		{
 			id:         "unknwon",
@@ -291,18 +285,17 @@ func TestFindTaskByID(t *testing.T) {
 		},
 	}
 	for _, v := range samples {
-		req, err := http.NewRequest("GET", "/tasks", nil)
-		OnError(err, fmt.Sprintf("Error on GET /tasks/id: %v", err))
-		req = mux.SetURLVars(req, map[string]string{"id": v.id})
+		router := SetupRouter()
 		rr := httptest.NewRecorder()
-		handler := http.HandlerFunc(server.GetTask)
+		req, err := http.NewRequest("GET", "/tasks/"+v.id, nil)
+		OnError(err, fmt.Sprintf("Error on GET /tasks/id: %v", err))
 		req.Header.Set("Authorization", v.tokenGiven)
-		handler.ServeHTTP(rr, req)
+		router.ServeHTTP(rr, req)
 
+		assert.Equal(t, rr.Code, v.statusCode)
 		responseMap := make(map[string]interface{})
 		err = json.Unmarshal(rr.Body.Bytes(), &responseMap)
-		OnError(err, fmt.Sprintf("Cannot convert to json: %v", err))
-		assert.Equal(t, rr.Code, v.statusCode)
+		OnError(err, fmt.Sprintf("Cannot convert to jsosn: %v", err))
 
 		if v.statusCode == 200 {
 			assert.Equal(t, responseMap["summary"], v.summary)
@@ -315,7 +308,7 @@ func TestFindTaskByID(t *testing.T) {
 }
 
 func TestUpdateTask(t *testing.T) {
-	err := RefreshUserAndTaskTable()
+	err := RefreshTables()
 	OnError(err, "Error refreshing users table")
 	users, tasks, err := SeedUsersAndTasks()
 	OnError(err, fmt.Sprintf("Error seeding user: %v\n", err))
@@ -323,10 +316,10 @@ func TestUpdateTask(t *testing.T) {
 	technicianUser := users[2]
 	firstTechnicianTask := tasks[0]
 	secondTechnicianTask := tasks[1]
-	managerToken, err := server.SignIn(managerUser.Email, "password")
+	managerToken, err := SignIn(managerUser.Email, "password")
 	OnError(err, fmt.Sprintf("Cannot login as manager: %v\n", err))
 	managerTokenString := fmt.Sprintf("Bearer %v", managerToken)
-	technicianToken, err := server.SignIn(technicianUser.Email, "password")
+	technicianToken, err := SignIn(technicianUser.Email, "password")
 	OnError(err, fmt.Sprintf("Cannot login as technician: %v\n", err))
 	technicianTokenString := fmt.Sprintf("Bearer %v", technicianToken)
 
@@ -343,7 +336,7 @@ func TestUpdateTask(t *testing.T) {
 			id:           strconv.Itoa(int(firstTechnicianTask.ID)),
 			updateJSON:   `{"summary": "This is the updated summary"}`,
 			summary:      "This is the updated summary",
-			author_id:    3,
+			author_id:    int(technicianUser.ID),
 			tokenGiven:   technicianTokenString,
 			statusCode:   200,
 			errorMessage: "",
@@ -383,7 +376,7 @@ func TestUpdateTask(t *testing.T) {
 			updateJSON:   `{"summary": "This is the updated summary"}`,
 			tokenGiven:   "",
 			statusCode:   401,
-			errorMessage: "unauthorized",
+			errorMessage: "token contains an invalid number of segments",
 		},
 		{
 			// When incorrect token is provided
@@ -391,7 +384,7 @@ func TestUpdateTask(t *testing.T) {
 			updateJSON:   `{"summary": "This is the updated summary"}`,
 			tokenGiven:   "this is an incorrect token",
 			statusCode:   401,
-			errorMessage: "unauthorized",
+			errorMessage: "token contains an invalid number of segments",
 		},
 		{
 			id:         "unknwon",
@@ -400,13 +393,12 @@ func TestUpdateTask(t *testing.T) {
 	}
 
 	for _, v := range samples {
-		req, err := http.NewRequest("PUT", "/tasks/", bytes.NewBufferString(v.updateJSON))
-		OnError(err, fmt.Sprintf("Error on PUT /tasks/id: %v", err))
-		req = mux.SetURLVars(req, map[string]string{"id": v.id})
+		router := SetupRouter()
 		rr := httptest.NewRecorder()
-		handler := http.HandlerFunc(server.UpdateTask)
+		req, err := http.NewRequest("PUT", "/tasks/"+v.id, bytes.NewBufferString(v.updateJSON))
+		OnError(err, fmt.Sprintf("Error on PUT /tasks/id: %v", err))
 		req.Header.Set("Authorization", v.tokenGiven)
-		handler.ServeHTTP(rr, req)
+		router.ServeHTTP(rr, req)
 
 		responseMap := make(map[string]interface{})
 		err = json.Unmarshal(rr.Body.Bytes(), &responseMap)
@@ -423,7 +415,7 @@ func TestUpdateTask(t *testing.T) {
 }
 
 func TestDeleteTask(t *testing.T) {
-	err := RefreshUserAndTaskTable()
+	err := RefreshTables()
 	OnError(err, "Error refreshing users table")
 	users, tasks, err := SeedUsersAndTasks()
 	OnError(err, fmt.Sprintf("Error seeding user: %v\n", err))
@@ -431,10 +423,10 @@ func TestDeleteTask(t *testing.T) {
 	technicianUser := users[2]
 	firstTechnicianTask := tasks[0]
 	secondTechnicianTask := tasks[1]
-	managerToken, err := server.SignIn(managerUser.Email, "password")
+	managerToken, err := SignIn(managerUser.Email, "password")
 	OnError(err, fmt.Sprintf("Cannot login as manager: %v\n", err))
 	managerTokenString := fmt.Sprintf("Bearer %v", managerToken)
-	technicianToken, err := server.SignIn(technicianUser.Email, "password")
+	technicianToken, err := SignIn(technicianUser.Email, "password")
 	OnError(err, fmt.Sprintf("Cannot login as technician: %v\n", err))
 	technicianTokenString := fmt.Sprintf("Bearer %v", technicianToken)
 
@@ -459,7 +451,7 @@ func TestDeleteTask(t *testing.T) {
 		{
 			id:           strconv.Itoa(999),
 			tokenGiven:   managerTokenString,
-			statusCode:   400,
+			statusCode:   404,
 			errorMessage: "",
 		},
 		{
@@ -474,14 +466,14 @@ func TestDeleteTask(t *testing.T) {
 			id:           strconv.Itoa(int(firstTechnicianTask.ID)),
 			tokenGiven:   "",
 			statusCode:   401,
-			errorMessage: "unauthorized",
+			errorMessage: "token contains an invalid number of segments",
 		},
 		{
 			// When incorrect token is provided
 			id:           strconv.Itoa(int(firstTechnicianTask.ID)),
 			tokenGiven:   "this is an incorrect token",
 			statusCode:   401,
-			errorMessage: "unauthorized",
+			errorMessage: "token contains an invalid number of segments",
 		},
 		{
 			id:         "unknwon",
@@ -490,12 +482,12 @@ func TestDeleteTask(t *testing.T) {
 	}
 
 	for _, v := range samples {
-		req, _ := http.NewRequest("GET", "/tasks", nil)
-		req = mux.SetURLVars(req, map[string]string{"id": v.id})
+		router := SetupRouter()
 		rr := httptest.NewRecorder()
-		handler := http.HandlerFunc(server.DeleteTask)
+		req, err := http.NewRequest("DELETE", "/tasks/"+v.id, nil)
+		OnError(err, fmt.Sprintf("Error on DELETE /tasks/id: %v", err))
 		req.Header.Set("Authorization", v.tokenGiven)
-		handler.ServeHTTP(rr, req)
+		router.ServeHTTP(rr, req)
 
 		assert.Equal(t, rr.Code, v.statusCode)
 		if v.statusCode == 401 && v.errorMessage != "" {

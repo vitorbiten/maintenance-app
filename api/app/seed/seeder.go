@@ -1,9 +1,9 @@
 package seed
 
 import (
+	"database/sql"
 	"log"
 
-	"github.com/jinzhu/gorm"
 	"github.com/vitorbiten/maintenance/api/app/enums"
 	"github.com/vitorbiten/maintenance/api/app/models"
 )
@@ -32,27 +32,22 @@ var tasks = []models.Task{
 	},
 }
 
-func Load(db *gorm.DB) {
-	err := db.Debug().DropTableIfExists(&models.Task{}, &models.User{}).Error
+func Load(db *sql.DB) {
+	_, err := db.Exec("Delete from users;")
 	if err != nil {
-		log.Fatalf("cannot drop table: %v", err)
+		log.Fatalf("cannot erase users table")
 	}
-	err = db.Debug().AutoMigrate(&models.User{}, &models.Task{}).Error
+	_, err = db.Exec("Delete from tasks;")
 	if err != nil {
-		log.Fatalf("cannot migrate table: %v", err)
+		log.Fatalf("cannot erase tasks table")
 	}
-	err = db.Debug().Model(&models.Task{}).AddForeignKey("author_id", "users(id)", "cascade", "cascade").Error
-	if err != nil {
-		log.Fatalf("attaching foreign key error: %v", err)
-	}
-
 	for i := range users {
 		err = users[i].HashPassword()
 		if err != nil {
 			log.Fatalf("cannot seed users table: %v", err)
 		}
 		users[i].Prepare()
-		err = db.Debug().Model(&models.User{}).Create(&users[i]).Error
+		_, err = db.Exec("INSERT INTO `users` (`nickname`, `email`, `user_type`, `password`) VALUES (?, ?, ?, ?);", users[i].Nickname, users[i].Email, users[i].UserType, users[i].Password)
 		if err != nil {
 			log.Fatalf("cannot seed users table: %v", err)
 		}
@@ -65,8 +60,13 @@ func Load(db *gorm.DB) {
 		if err != nil {
 			log.Fatalf("cannot seed tasks table: %v", err)
 		}
-		tasks[i].AuthorID = users[0].ID
-		err = db.Debug().Model(&models.Task{}).Create(&tasks[i]).Error
+		var userId uint64
+		err = db.QueryRow("SELECT id FROM users LIMIT 1").Scan(&userId)
+		if err != nil {
+			log.Fatalf("cannot seed tasks table: %v", err)
+		}
+		tasks[i].AuthorID = userId
+		_, err = db.Exec("INSERT INTO `tasks` (`summary`, `author_id`) VALUES (?, ?);", tasks[i].Summary, tasks[i].AuthorID)
 		if err != nil {
 			log.Fatalf("cannot seed tasks table: %v", err)
 		}

@@ -2,19 +2,17 @@ package controllers
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 
-	"github.com/gorilla/mux"
+	"github.com/gin-gonic/gin"
+	"github.com/vitorbiten/maintenance/api/app/adapters"
 	rabbitmqAdapter "github.com/vitorbiten/maintenance/api/app/adapters"
 	"github.com/vitorbiten/maintenance/api/app/auth"
 	"github.com/vitorbiten/maintenance/api/app/enums"
 	"github.com/vitorbiten/maintenance/api/app/models"
-	"github.com/vitorbiten/maintenance/api/app/responses"
-	"github.com/vitorbiten/maintenance/api/app/utils"
 )
 
 // CreateTask creates a task
@@ -31,54 +29,59 @@ import (
 //	@Failure		422	{object}	nil
 //	@Failure		500	{object}	nil
 //	@Router			/tasks [post]
-func (server *Server) CreateTask(w http.ResponseWriter, r *http.Request) {
+func CreateTask(context *gin.Context) {
 	user := models.User{}
 	task := models.Task{}
 
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(context.Request.Body)
 	if err != nil {
-		responses.ERROR(w, http.StatusUnprocessableEntity, err)
+		context.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
-	uid, err := auth.ExtractTokenID(r)
+	uid, err := auth.ExtractTokenID(context.Request)
 	if err != nil {
-		responses.ERROR(w, http.StatusUnauthorized, errors.New("unauthorized"))
+		context.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
-	tokenUser, err := user.FindUserByID(server.DB, uint32(uid))
+	tx, err := adapters.DB.Begin()
 	if err != nil {
-		responses.ERROR(w, http.StatusNotFound, err)
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	tokenUser, err := user.FindUserByID(tx, uid)
+	if err != nil {
+		context.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 	if tokenUser.UserType != enums.TECHNICIAN {
-		responses.ERROR(w, http.StatusUnauthorized, errors.New("unauthorized"))
+		context.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 	err = json.Unmarshal(body, &task)
 	if err != nil {
-		responses.ERROR(w, http.StatusUnprocessableEntity, err)
+		context.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
 	err = task.Validate()
 	if err != nil {
-		responses.ERROR(w, http.StatusUnprocessableEntity, err)
+		context.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
 	err = task.Prepare()
 	if err != nil {
-		responses.ERROR(w, http.StatusUnprocessableEntity, err)
+		context.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
 	task.AuthorID = uid
-	taskCreated, err := task.SaveTask(server.DB)
+	taskCreated, err := task.SaveTask(tx)
 	if err != nil {
-		formattedError := utils.FormatDBError(err.Error())
-		responses.ERROR(w, http.StatusInternalServerError, formattedError)
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	managers, err := user.FindAllManagers(server.DB)
+	task.ID = uint64(taskCreated)
+	managers, err := user.FindAllManagers(tx)
 	if err != nil {
-		responses.ERROR(w, http.StatusInternalServerError, err)
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	var messages []map[string]interface{}
@@ -86,19 +89,24 @@ func (server *Server) CreateTask(w http.ResponseWriter, r *http.Request) {
 		for _, manager := range *managers {
 			messages = append(messages, map[string]interface{}{
 				"nickname":  tokenUser.Nickname,
-				"task_id":   strconv.Itoa(int(task.ID)),
+				"task_id":   strconv.Itoa(int(taskCreated)),
 				"task_date": task.Date,
 				"email":     manager.Email,
 			})
 		}
 		err = rabbitmqAdapter.PublishMessages(messages, "notification")
 		if err != nil {
-			responses.ERROR(w, http.StatusInternalServerError, err)
+			context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 	}
-	w.Header().Set("Location", fmt.Sprintf("%s%s/%d", r.Host, r.URL.Path, taskCreated.ID))
-	responses.JSON(w, http.StatusCreated, taskCreated)
+	err = tx.Commit()
+	if err != nil {
+		tx.Rollback()
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	context.JSON(http.StatusCreated, task)
 }
 
 // GetTasks returns all existing tasks
@@ -112,34 +120,51 @@ func (server *Server) CreateTask(w http.ResponseWriter, r *http.Request) {
 //	@Failure		404	{object}	nil
 //	@Failure		500	{object}	nil
 //	@Router			/tasks [get]
-func (server *Server) GetTasks(w http.ResponseWriter, r *http.Request) {
+func GetTasks(context *gin.Context) {
 	user := models.User{}
 	task := models.Task{}
 
-	uid, err := auth.ExtractTokenID(r)
+	uid, err := auth.ExtractTokenID(context.Request)
 	if err != nil {
-		responses.ERROR(w, http.StatusUnauthorized, errors.New("unauthorized"))
+		context.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
-	tokenUser, err := user.FindUserByID(server.DB, uint32(uid))
+	tx, err := adapters.DB.Begin()
 	if err != nil {
-		responses.ERROR(w, http.StatusNotFound, err)
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	tokenUser, err := user.FindUserByID(tx, uid)
+	if err != nil {
+		context.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 	if tokenUser.UserType == enums.MANAGER {
-		allTasks, err := task.FindAllTasks(server.DB)
+		allTasks, err := task.FindAllTasks(adapters.DB)
 		if err != nil {
-			responses.ERROR(w, http.StatusInternalServerError, err)
+			context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		responses.JSON(w, http.StatusOK, allTasks)
+		err = tx.Commit()
+		if err != nil {
+			tx.Rollback()
+			context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		context.JSON(http.StatusOK, allTasks)
 	} else {
-		authorTasks, err := task.FindTasksByAuthorID(server.DB, uint64(tokenUser.ID))
+		authorTasks, err := task.FindTasksByAuthorID(adapters.DB, uint64(tokenUser.ID))
 		if err != nil {
-			responses.ERROR(w, http.StatusInternalServerError, err)
+			context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		responses.JSON(w, http.StatusOK, authorTasks)
+		err = tx.Commit()
+		if err != nil {
+			tx.Rollback()
+			context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		context.JSON(http.StatusOK, authorTasks)
 	}
 }
 
@@ -158,36 +183,46 @@ func (server *Server) GetTasks(w http.ResponseWriter, r *http.Request) {
 //	@Failure		404	{object}	nil
 //	@Failure		500	{object}	nil
 //	@Router			/tasks/id [get]
-func (server *Server) GetTask(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+func GetTask(context *gin.Context) {
 	user := models.User{}
-
-	pid, err := strconv.ParseUint(vars["id"], 10, 64)
-	if err != nil {
-		responses.ERROR(w, http.StatusBadRequest, err)
-		return
-	}
 	task := models.Task{}
-	taskReceived, err := task.FindTaskByID(server.DB, pid)
+
+	pid, err := strconv.ParseUint(context.Param("id"), 10, 64)
 	if err != nil {
-		responses.ERROR(w, http.StatusNotFound, err)
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	uid, err := auth.ExtractTokenID(r)
+	uid, err := auth.ExtractTokenID(context.Request)
 	if err != nil {
-		responses.ERROR(w, http.StatusUnauthorized, errors.New("unauthorized"))
+		context.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
-	requestUser, err := user.FindUserByID(server.DB, uint32(uid))
+	tx, err := adapters.DB.Begin()
 	if err != nil {
-		responses.ERROR(w, http.StatusNotFound, err)
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	requestUser, err := user.FindUserByID(tx, uid)
+	if err != nil {
+		context.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	taskReceived, err := task.FindTaskByID(adapters.DB, pid)
+	if err != nil {
+		context.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 	if uid != taskReceived.AuthorID && requestUser.UserType != enums.MANAGER {
-		responses.ERROR(w, http.StatusUnauthorized, errors.New("unauthorized"))
+		context.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	responses.JSON(w, http.StatusOK, taskReceived)
+	err = tx.Commit()
+	if err != nil {
+		tx.Rollback()
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	context.JSON(http.StatusOK, taskReceived)
 }
 
 // UpdateTask updates a task by id
@@ -207,62 +242,71 @@ func (server *Server) GetTask(w http.ResponseWriter, r *http.Request) {
 //	@Failure		404	{object}	nil
 //	@Failure		500	{object}	nil
 //	@Router			/tasks/id [put]
-func (server *Server) UpdateTask(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+func UpdateTask(context *gin.Context) {
 	user := models.User{}
-
-	pid, err := strconv.ParseUint(vars["id"], 10, 64)
-	if err != nil {
-		responses.ERROR(w, http.StatusBadRequest, err)
-		return
-	}
 	task := models.Task{}
-	taskReceived, err := task.FindTaskByID(server.DB, pid)
+
+	tid, err := strconv.ParseUint(context.Param("id"), 10, 64)
 	if err != nil {
-		responses.ERROR(w, http.StatusInternalServerError, err)
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	uid, err := auth.ExtractTokenID(r)
+	uid, err := auth.ExtractTokenID(context.Request)
 	if err != nil {
-		responses.ERROR(w, http.StatusUnauthorized, errors.New("unauthorized"))
+		context.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
-	tokenUser, err := user.FindUserByID(server.DB, uint32(uid))
+	tx, err := adapters.DB.Begin()
 	if err != nil {
-		responses.ERROR(w, http.StatusNotFound, err)
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	tokenUser, err := user.FindUserByID(tx, uid)
+	if err != nil {
+		context.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	taskReceived, err := task.FindTaskByID(adapters.DB, tid)
+	if err != nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	if uid != taskReceived.AuthorID || tokenUser.UserType == enums.MANAGER {
-		responses.ERROR(w, http.StatusUnauthorized, errors.New("unauthorized"))
+		context.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(context.Request.Body)
 	if err != nil {
-		responses.ERROR(w, http.StatusUnprocessableEntity, err)
+		context.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
 	err = json.Unmarshal(body, &task)
 	if err != nil {
-		responses.ERROR(w, http.StatusUnprocessableEntity, err)
+		context.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
 	err = task.Validate()
 	if err != nil {
-		responses.ERROR(w, http.StatusUnprocessableEntity, err)
+		context.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
 	err = task.Prepare()
 	if err != nil {
-		responses.ERROR(w, http.StatusUnprocessableEntity, err)
+		context.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
-	taskUpdated, err := task.UpdateATask(server.DB, pid)
+	taskUpdated, err := task.UpdateATask(adapters.DB, tid)
 	if err != nil {
-		formattedError := utils.FormatDBError(err.Error())
-		responses.ERROR(w, http.StatusInternalServerError, formattedError)
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	responses.JSON(w, http.StatusOK, taskUpdated)
+	err = tx.Commit()
+	if err != nil {
+		tx.Rollback()
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	context.JSON(http.StatusOK, taskUpdated)
 }
 
 // DeleteTask deletes a task by id
@@ -278,35 +322,49 @@ func (server *Server) UpdateTask(w http.ResponseWriter, r *http.Request) {
 //	@Failure		401	{object}	nil
 //	@Failure		404	{object}	nil
 //	@Router			/tasks/id [delete]
-func (server *Server) DeleteTask(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+func DeleteTask(context *gin.Context) {
 	user := models.User{}
 	task := models.Task{}
 
-	pid, err := strconv.ParseUint(vars["id"], 10, 64)
+	pid, err := strconv.ParseUint(context.Param("id"), 10, 64)
 	if err != nil {
-		responses.ERROR(w, http.StatusBadRequest, err)
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	uid, err := auth.ExtractTokenID(r)
+	uid, err := auth.ExtractTokenID(context.Request)
 	if err != nil {
-		responses.ERROR(w, http.StatusUnauthorized, errors.New("unauthorized"))
+		context.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
-	tokenUser, err := user.FindUserByID(server.DB, uint32(uid))
+	tx, err := adapters.DB.Begin()
 	if err != nil {
-		responses.ERROR(w, http.StatusBadRequest, err)
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	tokenUser, err := user.FindUserByID(tx, uid)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	if tokenUser.UserType != enums.MANAGER {
-		responses.ERROR(w, http.StatusUnauthorized, errors.New("unauthorized"))
+		context.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	_, err = task.DeleteATask(server.DB, pid)
+	res, err := task.DeleteATask(adapters.DB, pid)
 	if err != nil {
-		responses.ERROR(w, http.StatusBadRequest, err)
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	w.Header().Set("Entity", fmt.Sprintf("%d", pid))
-	responses.JSON(w, http.StatusNoContent, "")
+	if res == 0 {
+		context.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
+		return
+	}
+	err = tx.Commit()
+	if err != nil {
+		tx.Rollback()
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	context.Header("Entity", fmt.Sprintf("%d", pid))
+	context.JSON(http.StatusNoContent, "")
 }

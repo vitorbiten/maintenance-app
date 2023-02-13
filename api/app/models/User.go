@@ -1,6 +1,7 @@
 package models
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"html"
@@ -9,7 +10,6 @@ import (
 	"time"
 
 	"github.com/badoux/checkmail"
-	"github.com/jinzhu/gorm"
 	"github.com/vitorbiten/maintenance/api/app/enums"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -27,13 +27,13 @@ type Password struct {
 }
 
 type User struct {
-	ID        uint32    `gorm:"primary_key;auto_increment" json:"id" example:"1"`
-	Nickname  string    `gorm:"size:255;not null;unique" json:"nickname" example:"Steve"`
-	Email     string    `gorm:"size:100;not null;unique" json:"email"  example:"steve@email.com"`
-	UserType  string    `gorm:"type:enum('manager','technician');default:'technician'" json:"user_type"  example:"technician"`
-	Password  string    `gorm:"size:100;not null;" json:"password,omitempty" example:"password"`
-	CreatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at" example:"2023-01-27T20:03:44Z"`
-	UpdatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at" example:"2023-01-27T20:03:44Z"`
+	ID        uint64    `json:"id" example:"1"`
+	Nickname  string    `json:"nickname" example:"Steve"`
+	Email     string    `json:"email"  example:"steve@email.com"`
+	UserType  string    `json:"user_type"  example:"technician"`
+	Password  string    `json:"password,omitempty" example:"password"`
+	CreatedAt time.Time `json:"created_at" example:"2023-01-27T20:03:44Z"`
+	UpdatedAt time.Time `json:"updated_at" example:"2023-01-27T20:03:44Z"`
 }
 
 func (u *User) Validate(action string) error {
@@ -92,9 +92,6 @@ func (u *User) Prepare() {
 	u.ID = 0
 	u.Nickname = html.EscapeString(strings.TrimSpace(u.Nickname))
 	u.Email = html.EscapeString(strings.TrimSpace(u.Email))
-	now := time.Now()
-	u.CreatedAt = now
-	u.UpdatedAt = now
 }
 
 func Hash(password string) ([]byte, error) {
@@ -162,25 +159,36 @@ func (u *User) RemovePasswords(users *[]User) error {
 	return nil
 }
 
-func (u *User) SaveUser(db *gorm.DB) (*User, error) {
+func (u *User) SaveUser(db *sql.DB) (*User, error) {
 	err := u.HashPassword()
 	if err != nil {
 		return &User{}, err
 	}
-	err = db.Debug().Create(&u).Error
+
+	_, err = db.Exec("INSERT INTO `users` (`nickname`, `email`, `password`) VALUES (?, ?, ?);", &u.Nickname, &u.Email, &u.Password)
 	if err != nil {
 		return &User{}, err
 	}
 	return u, nil
 }
 
-func (u *User) FindAllTechnicians(db *gorm.DB) (*[]User, error) {
+func (u *User) FindAllTechnicians(db *sql.DB) (*[]User, error) {
 	users := []User{}
 
-	err := db.Debug().Model(&User{}).Where("user_type != ?", enums.MANAGER).Limit(100).Find(&users).Error
+	results, err := db.Query("SELECT id, nickname, email FROM users WHERE user_type = ?;", enums.TECHNICIAN)
 	if err != nil {
 		return &[]User{}, err
 	}
+
+	for results.Next() {
+		var user User
+		err = results.Scan(&user.ID, &user.Nickname, &user.Email)
+		if err != nil {
+			return &[]User{}, err
+		}
+		users = append(users, user)
+	}
+
 	err = u.RemovePasswords(&users)
 	if err != nil {
 		return &[]User{}, err
@@ -188,13 +196,23 @@ func (u *User) FindAllTechnicians(db *gorm.DB) (*[]User, error) {
 	return &users, err
 }
 
-func (u *User) FindAllManagers(db *gorm.DB) (*[]User, error) {
+func (u *User) FindAllManagers(tx *sql.Tx) (*[]User, error) {
 	users := []User{}
 
-	err := db.Debug().Model(&User{}).Where("user_type = ?", enums.MANAGER).Limit(100).Find(&users).Error
+	results, err := tx.Query("SELECT id, nickname, email FROM users WHERE user_type = ?;", enums.MANAGER)
 	if err != nil {
 		return &[]User{}, err
 	}
+
+	for results.Next() {
+		var user User
+		err = results.Scan(&user.ID, &user.Nickname, &user.Email)
+		if err != nil {
+			return &[]User{}, err
+		}
+		users = append(users, user)
+	}
+
 	err = u.RemovePasswords(&users)
 	if err != nil {
 		return &[]User{}, err
@@ -202,12 +220,12 @@ func (u *User) FindAllManagers(db *gorm.DB) (*[]User, error) {
 	return &users, err
 }
 
-func (u *User) FindUserByID(db *gorm.DB, uid uint32) (*User, error) {
-	err := db.Debug().Model(User{}).Where("id = ?", uid).Take(&u).Error
-	if gorm.IsRecordNotFoundError(err) {
+func (u *User) FindUserByID(tx *sql.Tx, uid uint64) (*User, error) {
+	err := tx.QueryRow("SELECT id, nickname, email, password, user_type FROM users WHERE id = ?;", uid).Scan(&u.ID, &u.Nickname, &u.Email, &u.Password, &u.UserType)
+	switch {
+	case err == sql.ErrNoRows:
 		return &User{}, errors.New("user not found")
-	}
-	if err != nil {
+	case err != nil:
 		return &User{}, err
 	}
 	err = u.RemovePassword()
@@ -217,37 +235,52 @@ func (u *User) FindUserByID(db *gorm.DB, uid uint32) (*User, error) {
 	return u, err
 }
 
-func (u *User) UpdateAUser(db *gorm.DB, uid uint32) (*User, error) {
-	err := u.HashPassword()
-	if err != nil {
-		log.Fatal(err)
-	}
-	db = db.Debug().Model(&User{}).Where("id = ?", uid).Take(&User{}).UpdateColumns(
-		map[string]interface{}{
-			"password":   u.Password,
-			"nickname":   u.Nickname,
-			"email":      u.Email,
-			"updated_at": time.Now(),
-		},
-	)
-	if db.Error != nil {
-		return &User{}, db.Error
-	}
-	err = db.Debug().Model(&User{}).Where("id = ?", uid).Take(&u).Error
-	if err != nil {
+func (u *User) FindUserByEmail(db *sql.DB, email string) (*User, error) {
+	err := db.QueryRow("SELECT id, password FROM users WHERE email = ?;", email).Scan(&u.ID, &u.Password)
+	switch {
+	case err == sql.ErrNoRows:
+		return &User{}, errors.New("user not found")
+	case err != nil:
 		return &User{}, err
 	}
 	err = u.RemovePassword()
 	if err != nil {
 		return &User{}, err
 	}
-	return u, nil
+	return u, err
 }
 
-func (u *User) DeleteAUser(db *gorm.DB, uid uint32) (int64, error) {
-	db = db.Debug().Model(&User{}).Where("id = ?", uid).Take(&User{}).Delete(&User{})
-	if db.Error != nil {
-		return 0, db.Error
+func (u *User) UpdateAUser(db *sql.DB, uid uint64) (*User, error) {
+	err := u.HashPassword()
+	if err != nil {
+		log.Fatal(err)
 	}
-	return db.RowsAffected, nil
+
+	res, err := db.Exec("UPDATE users SET nickname = ?, email = ?, password = ?, updated_at = ? WHERE id = ?;", &u.Nickname, &u.Email, &u.Password, time.Now(), uid)
+	if err != nil {
+		return &User{}, err
+	}
+	count, err := res.RowsAffected()
+	if err != nil {
+		return &User{}, err
+	}
+	if count > 0 {
+		return u, nil
+	}
+	return &User{}, errors.New("user not found")
+}
+
+func (u *User) DeleteAUser(db *sql.DB, uid uint64) (int64, error) {
+	res, err := db.Exec("DELETE FROM `users` WHERE id = ?;", uid)
+	if err != nil {
+		return 0, err
+	}
+	count, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	if count > 0 {
+		return 1, nil
+	}
+	return 0, nil
 }

@@ -3,9 +3,9 @@ package controllers
 import (
 	"net/http"
 
-	"github.com/vitorbiten/maintenance/api/app/responses"
+	"github.com/gin-gonic/gin"
 )
 
-func (server *Server) Home(w http.ResponseWriter, r *http.Request) {
-	responses.JSON(w, http.StatusOK, "Welcome to the Maintenance API")
+func Home(context *gin.Context) {
+	context.JSON(http.StatusOK, "Welcome to the Maintenance API")
 }

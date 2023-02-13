@@ -13,7 +13,7 @@ import (
 )
 
 func TestSignIn(t *testing.T) {
-	err := RefreshUserTable()
+	err := RefreshTables()
 	OnError(err, "Error refreshing users table")
 	user, err := SeedOneUser()
 	OnError(err, fmt.Sprintf("Error seeding user: %v\n", err))
@@ -31,7 +31,7 @@ func TestSignIn(t *testing.T) {
 		{
 			email:        "Wrong email",
 			password:     "password",
-			errorMessage: "record not found",
+			errorMessage: "user not found",
 		},
 		{
 			email:        user.Email,
@@ -41,7 +41,7 @@ func TestSignIn(t *testing.T) {
 	}
 
 	for _, v := range samples {
-		token, err := server.SignIn(v.email, v.password)
+		token, err := SignIn(v.email, v.password)
 		if err != nil {
 			assert.Equal(t, err, errors.New(v.errorMessage))
 		} else {
@@ -51,7 +51,7 @@ func TestSignIn(t *testing.T) {
 }
 
 func TestLogin(t *testing.T) {
-	err := RefreshUserTable()
+	err := RefreshTables()
 	OnError(err, "Error refreshing users table")
 	_, err = SeedOneUser()
 	OnError(err, fmt.Sprintf("Error seeding user: %v\n", err))
@@ -96,11 +96,11 @@ func TestLogin(t *testing.T) {
 	}
 
 	for _, v := range samples {
+		router := SetupRouter()
+		rr := httptest.NewRecorder()
 		req, err := http.NewRequest("POST", "/login", bytes.NewBufferString(v.inputJSON))
 		OnError(err, fmt.Sprintf("Error on POST /login: %v", err))
-		rr := httptest.NewRecorder()
-		handler := http.HandlerFunc(server.Login)
-		handler.ServeHTTP(rr, req)
+		router.ServeHTTP(rr, req)
 
 		assert.Equal(t, rr.Code, v.statusCode)
 		if v.statusCode == 200 {

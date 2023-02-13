@@ -11,11 +11,11 @@ import (
 )
 
 func TestHome(t *testing.T) {
-	req, err := http.NewRequest("GET", "/", nil)
-	OnError(err, fmt.Sprintf("Error on GET /: %v", err))
+	router := SetupRouter()
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(server.Home)
-	handler.ServeHTTP(rr, req)
+	req, err := http.NewRequest("GET", "/", nil)
+	OnError(err, fmt.Sprintf("Error on POST /login: %v", err))
+	router.ServeHTTP(rr, req)
 
 	var responseString string
 	err = json.Unmarshal(rr.Body.Bytes(), &responseString)

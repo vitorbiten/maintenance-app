@@ -1,3 +1,6 @@
+include .env
+export
+
 ## Development:
 env: ## Copies .env.example files
 	cp .env.example .env
@@ -16,8 +19,20 @@ lint: ## Uses golangci-lint to lint
 	docker run -t --rm -v "$(CURDIR)/api:/app" -w /app golangci/golangci-lint:v1.50.1 golangci-lint run -v
 	docker run -t --rm -v "$(CURDIR)/worker:/app" -w /app golangci/golangci-lint:v1.50.1 golangci-lint run -v
 
+## Migrations:
+migrate-up:
+	sql-migrate up
+
+migrate-down:
+	sql-migrate down
+
+create:
+	@read -p  "What is the name of migration?" NAME; \
+	sql-migrate new $$NAME 
+
 ## Test:
 test: ## Run the tests on the project
+	clear
 	docker-compose -f docker-compose.test.yml -p test up --build -d
 	CGO_ENABLED=0 GOOS=linux go test -coverpkg ./api/... ./api/app/...
 	docker-compose -f docker-compose.test.yml -p test down

@@ -1,26 +1,27 @@
 package controllers
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"testing"
-	"time"
 
-	"github.com/jinzhu/gorm"
+	"github.com/gin-gonic/gin"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
+	_ "github.com/joho/godotenv/autoload"
+	"github.com/vitorbiten/maintenance/api/app/adapters"
 	"github.com/vitorbiten/maintenance/api/app/enums"
 	"github.com/vitorbiten/maintenance/api/app/models"
 	"github.com/vitorbiten/maintenance/api/app/utils"
 )
-
-var server = Server{}
 
 func TestMain(m *testing.M) {
 	err := godotenv.Load(os.ExpandEnv("../../.env"))
 	if err != nil {
 		log.Printf("Error getting env %v\n", err)
 	}
+
+	gin.SetMode(gin.TestMode)
 
 	Database()
 	os.Exit(m.Run())
@@ -32,62 +33,71 @@ func OnError(err error, text string) {
 	}
 }
 
-func Database() {
-	DBURL := fmt.Sprintf(
-		"%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True&loc=Local",
-		os.Getenv("TEST_DB_USER"),
-		os.Getenv("TEST_DB_PASSWORD"),
-		os.Getenv("TEST_DB_HOST"),
-		os.Getenv("TEST_DB_PORT"),
-		os.Getenv("TEST_DB_NAME"),
-	)
-
-	for {
-		var err error
-		server.DB, err = gorm.Open("mysql", DBURL)
-		if err == nil {
-			break
-		}
-		log.Printf("Error connecting to the mysql database: %s", err)
-		log.Println("Retrying in 5 seconds...")
-		time.Sleep(5 * time.Second)
-	}
-	log.Println("We are connected to the test mysql daptabase")
-
-	server.DB.Debug().AutoMigrate(&models.User{}, &models.Task{})
+func SetupRouter() *gin.Engine {
+	router := gin.Default()
+	InitializeRoutes(router)
+	return router
 }
 
-func RefreshUserTable() error {
-	err := server.DB.DropTableIfExists(&models.User{}).Error
+func Database() {
+	adapters.LoadTestDatabase()
+	MigrateDB()
+}
+
+func MigrateDB() error {
+	var err error
+	_, err = adapters.DB.Exec("DROP DATABASE IF EXISTS `maintenance_api_test`")
 	if err != nil {
-		return err
+		log.Fatalf("cannot drop users table: %s", err)
 	}
-	err = server.DB.AutoMigrate(&models.User{}).Error
+	_, err = adapters.DB.Exec("CREATE DATABASE IF NOT EXISTS `maintenance_api_test`")
 	if err != nil {
-		return err
+		log.Fatalf("cannot create database: %s", err)
 	}
-	log.Printf("Successfully refreshed table")
+	_, err = adapters.DB.Exec("USE `maintenance_api_test`")
+	if err != nil {
+		log.Fatalf("cannot use database: %s", err)
+	}
+	_, err = adapters.DB.Exec("CREATE TABLE IF NOT EXISTS `users` ( `id` bigint(10) unsigned NOT NULL AUTO_INCREMENT, `nickname` varchar(255) NOT NULL, `email` varchar(100) NOT NULL, `user_type` enum('manager','technician') DEFAULT 'technician', `password` varchar(100) NOT NULL, `created_at` datetime DEFAULT CURRENT_TIMESTAMP, `updated_at` datetime DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`id`), UNIQUE KEY `nickname` (`nickname`), UNIQUE KEY `email` (`email`) ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;")
+	if err != nil {
+		log.Fatalf("cannot migrated users table: %s", err)
+	}
+	_, err = adapters.DB.Exec("CREATE TABLE IF NOT EXISTS `tasks` ( `id` bigint(10) unsigned NOT NULL AUTO_INCREMENT, `summary` text NOT NULL, `author_id` bigint(10) unsigned NOT NULL, `date` datetime DEFAULT CURRENT_TIMESTAMP, `created_at` datetime DEFAULT CURRENT_TIMESTAMP, `updated_at` datetime DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`id`), KEY `tasks_author_id_users_id_foreign` (`author_id`), CONSTRAINT `tasks_author_id_users_id_foreign` FOREIGN KEY (`author_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;")
+	if err != nil {
+		log.Fatalf("cannot migrated tasks table")
+	}
+	log.Printf("Successfully migrated dbs table")
+	return nil
+}
+
+func RefreshTables() error {
+	_, err := adapters.DB.Exec("DELETE FROM `users`;")
+	if err != nil {
+		log.Fatalf("cannot erase users table: %s", err)
+	}
+	_, err = adapters.DB.Exec("DELETE FROM `tasks`;")
+	if err != nil {
+		log.Fatalf("cannot erase tasks table: %s", err)
+	}
+	log.Printf("Successfully refreshed user table")
 	return nil
 }
 
 func SeedOneUser() (models.User, error) {
-	err := RefreshUserTable()
-	if err != nil {
-		log.Fatal(err)
-	}
 	user := models.User{
 		Nickname: "Pet",
 		Email:    "pet@gmail.com",
 		Password: "password",
 		UserType: enums.TECHNICIAN,
 	}
-	err = user.HashPassword()
+	err := user.HashPassword()
 	if err != nil {
 		return models.User{}, err
 	}
-	err = server.DB.Model(&models.User{}).Create(&user).Error
+	user.Prepare()
+	_, err = adapters.DB.Exec("INSERT INTO `users` (`nickname`, `email`, `user_type`, `password`) VALUES (?, ?, ?, ?);", user.Nickname, user.Email, user.UserType, user.Password)
 	if err != nil {
-		return models.User{}, err
+		log.Fatalf("cannot seed users table: %v", err)
 	}
 	return user, nil
 }
@@ -136,57 +146,51 @@ func SeedUsers() ([]models.User, error) {
 		if err != nil {
 			return []models.User{}, err
 		}
-		err := server.DB.Model(&models.User{}).Create(&users[i]).Error
+		users[i].Prepare()
+		res, err := adapters.DB.Exec("INSERT INTO `users` (`nickname`, `email`, `user_type`, `password`) VALUES (?, ?, ?, ?);", users[i].Nickname, users[i].Email, users[i].UserType, users[i].Password)
 		if err != nil {
 			return []models.User{}, err
 		}
+		lastInsertedId, err := res.LastInsertId()
+		if err != nil {
+			return []models.User{}, err
+		}
+		users[i].ID = uint64(lastInsertedId)
 	}
 	return users, nil
 }
 
-func RefreshUserAndTaskTable() error {
-	err := server.DB.DropTableIfExists(&models.User{}, &models.Task{}).Error
-	if err != nil {
-		return err
-	}
-	err = server.DB.AutoMigrate(&models.User{}, &models.Task{}).Error
-	if err != nil {
-		return err
-	}
-	log.Printf("Successfully refreshed tables")
-	return nil
-}
-
 func SeedOneUserAndOneTask() (models.User, models.Task, error) {
-	err := RefreshUserAndTaskTable()
-	if err != nil {
-		return models.User{}, models.Task{}, err
-	}
 	user := models.User{
 		Nickname: "Sam Phil",
 		Email:    "sam@gmail.com",
 		Password: "password",
 		UserType: enums.TECHNICIAN,
 	}
-	err = user.HashPassword()
+	err := user.HashPassword()
 	if err != nil {
 		log.Fatalf("cannot seed users table: %v", err)
 	}
-	err = server.DB.Model(&models.User{}).Create(&user).Error
+	user.Prepare()
+	res, err := adapters.DB.Exec("INSERT INTO `users` (`nickname`, `email`, `user_type`, `password`) VALUES (?, ?, ?, ?);", user.Nickname, user.Email, user.UserType, user.Password)
+	if err != nil {
+		return models.User{}, models.Task{}, err
+	}
+	lastInsertedId, err := res.LastInsertId()
 	if err != nil {
 		return models.User{}, models.Task{}, err
 	}
 	task := models.Task{
 		ID:       1,
 		Summary:  "This is the summary sam",
-		AuthorID: 1,
+		AuthorID: uint64(lastInsertedId),
 	}
 	encryptedTask := task
 	err = utils.Encrypt(&encryptedTask.Summary)
 	if err != nil {
 		log.Fatalf("cannot seed tasks table: %v", err)
 	}
-	err = server.DB.Model(&models.Task{}).Create(&encryptedTask).Error
+	_, err = adapters.DB.Exec("INSERT INTO `tasks` (`summary`, `author_id`) VALUES (?, ?);", encryptedTask.Summary, encryptedTask.AuthorID)
 	if err != nil {
 		return models.User{}, models.Task{}, err
 	}
@@ -202,11 +206,11 @@ func SeedUsersAndTasks() ([]models.User, []models.Task, error) {
 	var tasks = []models.Task{
 		{
 			Summary:  "Hello world 1",
-			AuthorID: 3,
+			AuthorID: users[2].ID,
 		},
 		{
 			Summary:  "Hello world 2",
-			AuthorID: 4,
+			AuthorID: users[3].ID,
 		},
 	}
 
@@ -215,10 +219,15 @@ func SeedUsersAndTasks() ([]models.User, []models.Task, error) {
 		if err != nil {
 			log.Fatalf("cannot seed tasks table: %v", err)
 		}
-		err = server.DB.Model(&models.Task{}).Create(&tasks[i]).Error
+		res, err := adapters.DB.Exec("INSERT INTO `tasks` (`summary`, `author_id`) VALUES (?, ?);", tasks[i].Summary, tasks[i].AuthorID)
 		if err != nil {
 			log.Fatalf("cannot seed tasks table: %v", err)
 		}
+		lastInsertedId, err := res.LastInsertId()
+		if err != nil {
+			return []models.User{}, []models.Task{}, err
+		}
+		tasks[i].ID = uint64(lastInsertedId)
 	}
 	return users, tasks, nil
 }

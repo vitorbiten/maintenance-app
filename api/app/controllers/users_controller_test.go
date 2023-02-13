@@ -9,14 +9,13 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/gorilla/mux"
 	"github.com/vitorbiten/maintenance/api/app/enums"
 	"github.com/vitorbiten/maintenance/api/app/models"
 	"gopkg.in/go-playground/assert.v1"
 )
 
 func TestCreateUser(t *testing.T) {
-	err := RefreshUserTable()
+	err := RefreshTables()
 	OnError(err, "Error refreshing users table")
 
 	samples := []struct {
@@ -27,21 +26,21 @@ func TestCreateUser(t *testing.T) {
 		errorMessage string
 	}{
 		{
-			inputJSON:    `{"nickname":"Pet", "email": "pet@gmail.com", "password": "password"}`,
+			inputJSON:    `{"nickname":"New", "email": "new@gmail.com", "password": "password"}`,
 			statusCode:   201,
-			nickname:     "Pet",
-			email:        "pet@gmail.com",
+			nickname:     "New",
+			email:        "new@gmail.com",
 			errorMessage: "",
 		},
 		{
-			inputJSON:    `{"nickname":"Frank", "email": "pet@gmail.com", "password": "password"}`,
+			inputJSON:    `{"nickname":"Frank", "email": "new@gmail.com", "password": "password"}`,
 			statusCode:   500,
-			errorMessage: "email already taken",
+			errorMessage: "incorrect details",
 		},
 		{
-			inputJSON:    `{"nickname":"Pet", "email": "grand@gmail.com", "password": "password"}`,
+			inputJSON:    `{"nickname":"New", "email": "grand@gmail.com", "password": "password"}`,
 			statusCode:   500,
-			errorMessage: "nickname already taken",
+			errorMessage: "incorrect details",
 		},
 		{
 			inputJSON:    `{"nickname":"Pet", "email": "pet@gmail.com", "password": "password", "user_type": "manager"}`,
@@ -71,11 +70,11 @@ func TestCreateUser(t *testing.T) {
 	}
 
 	for _, v := range samples {
+		router := SetupRouter()
+		rr := httptest.NewRecorder()
 		req, err := http.NewRequest("POST", "/users", bytes.NewBufferString(v.inputJSON))
 		OnError(err, fmt.Sprintf("Error on POST /users: %v", err))
-		rr := httptest.NewRecorder()
-		handler := http.HandlerFunc(server.CreateUser)
-		handler.ServeHTTP(rr, req)
+		router.ServeHTTP(rr, req)
 
 		responseMap := make(map[string]interface{})
 		err = json.Unmarshal(rr.Body.Bytes(), &responseMap)
@@ -92,16 +91,16 @@ func TestCreateUser(t *testing.T) {
 }
 
 func TestGetUsers(t *testing.T) {
-	err := RefreshUserTable()
+	err := RefreshTables()
 	OnError(err, "Error refreshing users table")
 	users, err := SeedUsers()
 	OnError(err, fmt.Sprintf("Error seeding user: %v\n", err))
 	managerUser := users[0]
 	technicianUser := users[2]
-	managerToken, err := server.SignIn(managerUser.Email, "password")
+	managerToken, err := SignIn(managerUser.Email, "password")
 	OnError(err, fmt.Sprintf("Cannot login as manager: %v\n", err))
 	managerTokenString := fmt.Sprintf("Bearer %v", managerToken)
-	technicianToken, err := server.SignIn(technicianUser.Email, "password")
+	technicianToken, err := SignIn(technicianUser.Email, "password")
 	OnError(err, fmt.Sprintf("Cannot login as technician: %v\n", err))
 	technicianTokenString := fmt.Sprintf("Bearer %v", technicianToken)
 
@@ -117,19 +116,19 @@ func TestGetUsers(t *testing.T) {
 			errorMessage: "",
 			response: []models.User{
 				{
-					ID:       3,
+					ID:       users[2].ID,
 					Nickname: "Kenny Morris",
 					Email:    "kenny@gmail.com",
 					UserType: enums.TECHNICIAN,
 				},
 				{
-					ID:       4,
+					ID:       users[3].ID,
 					Nickname: "Denny Morris",
 					Email:    "denny@gmail.com",
 					UserType: enums.TECHNICIAN,
 				},
 				{
-					ID:       5,
+					ID:       users[4].ID,
 					Nickname: "Billy Joe",
 					Email:    "billy@gmail.com",
 					UserType: enums.TECHNICIAN,
@@ -146,23 +145,23 @@ func TestGetUsers(t *testing.T) {
 			// When incorrect token is given
 			tokenGiven:   "This is an incorrect token",
 			statusCode:   401,
-			errorMessage: "unauthorized",
+			errorMessage: "token contains an invalid number of segments",
 		},
 		{
 			// When no token is given
 			tokenGiven:   "",
 			statusCode:   401,
-			errorMessage: "unauthorized",
+			errorMessage: "token contains an invalid number of segments",
 		},
 	}
 
 	for _, v := range samples {
+		router := SetupRouter()
+		rr := httptest.NewRecorder()
 		req, err := http.NewRequest("GET", "/users", nil)
 		OnError(err, fmt.Sprintf("Error on GET /users: %v", err))
-		rr := httptest.NewRecorder()
-		handler := http.HandlerFunc(server.GetUsers)
 		req.Header.Set("Authorization", v.tokenGiven)
-		handler.ServeHTTP(rr, req)
+		router.ServeHTTP(rr, req)
 
 		assert.Equal(t, rr.Code, v.statusCode)
 		if v.statusCode == 200 {
@@ -184,22 +183,22 @@ func TestGetUsers(t *testing.T) {
 }
 
 func TestGetUserByID(t *testing.T) {
-	err := RefreshUserTable()
+	err := RefreshTables()
 	OnError(err, "Error refreshing users table")
 	users, err := SeedUsers()
 	OnError(err, fmt.Sprintf("Error seeding user: %v\n", err))
 	managerUser := users[0]
 	secondManagerUser := users[1]
 	technicianUser := users[2]
-	managerToken, err := server.SignIn(managerUser.Email, "password")
+	managerToken, err := SignIn(managerUser.Email, "password")
 	OnError(err, fmt.Sprintf("Cannot login as manager: %v\n", err))
 	ManagerTokenString := fmt.Sprintf("Bearer %v", managerToken)
-	technicianToken, err := server.SignIn(technicianUser.Email, "password")
+	technicianToken, err := SignIn(technicianUser.Email, "password")
 	OnError(err, fmt.Sprintf("Cannot login as technician: %v\n", err))
 	TechnicianTokenString := fmt.Sprintf("Bearer %v", technicianToken)
 
 	sample := []struct {
-		id           uint32
+		id           string
 		tokenGiven   string
 		statusCode   int
 		nickname     string
@@ -208,7 +207,7 @@ func TestGetUserByID(t *testing.T) {
 	}{
 		{
 			// When manager tries to get themself
-			id:           managerUser.ID,
+			id:           strconv.Itoa(int(managerUser.ID)),
 			tokenGiven:   ManagerTokenString,
 			statusCode:   200,
 			nickname:     managerUser.Nickname,
@@ -217,7 +216,7 @@ func TestGetUserByID(t *testing.T) {
 		},
 		{
 			// When manager tries to get a technician
-			id:           technicianUser.ID,
+			id:           strconv.Itoa(int(technicianUser.ID)),
 			tokenGiven:   ManagerTokenString,
 			statusCode:   200,
 			nickname:     technicianUser.Nickname,
@@ -226,7 +225,7 @@ func TestGetUserByID(t *testing.T) {
 		},
 		{
 			// When technician tries to get themself
-			id:           technicianUser.ID,
+			id:           strconv.Itoa(int(technicianUser.ID)),
 			tokenGiven:   TechnicianTokenString,
 			statusCode:   200,
 			nickname:     technicianUser.Nickname,
@@ -235,46 +234,40 @@ func TestGetUserByID(t *testing.T) {
 		},
 		{
 			// When incorrect id is given
-			id:           999,
+			id:           strconv.Itoa(999),
 			tokenGiven:   ManagerTokenString,
 			statusCode:   404,
 			errorMessage: "user not found",
 		},
 		{
 			// When manager tries to get another manager user
-			id:           secondManagerUser.ID,
+			id:           strconv.Itoa(int(secondManagerUser.ID)),
 			tokenGiven:   ManagerTokenString,
 			statusCode:   401,
 			errorMessage: "unauthorized",
 		},
 		{
 			// When technician tries to get manager user
-			id:           managerUser.ID,
+			id:           strconv.Itoa(int(managerUser.ID)),
 			tokenGiven:   TechnicianTokenString,
 			statusCode:   401,
 			errorMessage: "unauthorized",
 		},
 		{
 			// When incorrect token is given
+			id:           strconv.Itoa(int(technicianUser.ID)),
 			tokenGiven:   "This is an incorrect token",
 			statusCode:   401,
-			errorMessage: "unauthorized",
-		},
-		{
-			// When no token is given
-			tokenGiven:   "",
-			statusCode:   401,
-			errorMessage: "unauthorized",
+			errorMessage: "token contains an invalid number of segments",
 		},
 	}
 	for _, v := range sample {
-		req, err := http.NewRequest("GET", "/users", nil)
-		OnError(err, fmt.Sprintf("Error on GET /users/id: %v", err))
-		req = mux.SetURLVars(req, map[string]string{"id": fmt.Sprint(v.id)})
+		router := SetupRouter()
 		rr := httptest.NewRecorder()
-		handler := http.HandlerFunc(server.GetUser)
+		req, err := http.NewRequest("GET", "/users/"+v.id, nil)
+		OnError(err, fmt.Sprintf("Error on GET /users/id: %v", err))
 		req.Header.Set("Authorization", v.tokenGiven)
-		handler.ServeHTTP(rr, req)
+		router.ServeHTTP(rr, req)
 
 		responseMap := make(map[string]interface{})
 		err = json.Unmarshal(rr.Body.Bytes(), &responseMap)
@@ -291,16 +284,16 @@ func TestGetUserByID(t *testing.T) {
 }
 
 func TestUpdateUser(t *testing.T) {
-	err := RefreshUserTable()
+	err := RefreshTables()
 	OnError(err, "Error refreshing users table")
 	users, err := SeedUsers()
 	OnError(err, fmt.Sprintf("Error seeding user: %v\n", err))
 	managerUser := users[0]
 	technicianUser := users[2]
-	managerToken, err := server.SignIn(managerUser.Email, "password")
+	managerToken, err := SignIn(managerUser.Email, "password")
 	OnError(err, fmt.Sprintf("Cannot login as manager: %v\n", err))
 	ManagerTokenString := fmt.Sprintf("Bearer %v", managerToken)
-	technicianToken, err := server.SignIn(technicianUser.Email, "password")
+	technicianToken, err := SignIn(technicianUser.Email, "password")
 	OnError(err, fmt.Sprintf("Cannot login as technician: %v\n", err))
 	TechnicianTokenString := fmt.Sprintf("Bearer %v", technicianToken)
 
@@ -336,14 +329,14 @@ func TestUpdateUser(t *testing.T) {
 			updateJSON:   `{"nickname":"Frank", "email": "tomas@gmail.com", "password": "password"}`,
 			statusCode:   500,
 			tokenGiven:   ManagerTokenString,
-			errorMessage: "email already taken",
+			errorMessage: "incorrect details",
 		},
 		{
 			id:           strconv.Itoa(int(managerUser.ID)),
 			updateJSON:   `{"nickname":"Tomas", "email": "grand@gmail.com", "password": "password"}`,
 			statusCode:   500,
 			tokenGiven:   ManagerTokenString,
-			errorMessage: "nickname already taken",
+			errorMessage: "incorrect details",
 		},
 		{
 			id:           strconv.Itoa(int(managerUser.ID)),
@@ -403,7 +396,7 @@ func TestUpdateUser(t *testing.T) {
 			updateJSON:   `{"nickname":"Man", "email": "man@gmail.com", "password": "password"}`,
 			statusCode:   401,
 			tokenGiven:   "",
-			errorMessage: "unauthorized",
+			errorMessage: "token contains an invalid number of segments",
 		},
 		{
 			// When incorrect token is given
@@ -411,7 +404,7 @@ func TestUpdateUser(t *testing.T) {
 			updateJSON:   `{"nickname":"Woman", "email": "woman@gmail.com", "password": "password"}`,
 			statusCode:   401,
 			tokenGiven:   "This is incorrect token",
-			errorMessage: "unauthorized",
+			errorMessage: "token contains an invalid number of segments",
 		},
 		{
 			id:         "unknwon",
@@ -421,13 +414,12 @@ func TestUpdateUser(t *testing.T) {
 	}
 
 	for _, v := range samples {
-		req, err := http.NewRequest("POST", "/users", bytes.NewBufferString(v.updateJSON))
-		OnError(err, fmt.Sprintf("Error on POST /users: %v", err))
-		req = mux.SetURLVars(req, map[string]string{"id": v.id})
+		router := SetupRouter()
 		rr := httptest.NewRecorder()
-		handler := http.HandlerFunc(server.UpdateUser)
+		req, err := http.NewRequest("PUT", "/users/"+v.id, bytes.NewBufferString(v.updateJSON))
+		OnError(err, fmt.Sprintf("Error on PUT /users/id: %v", err))
 		req.Header.Set("Authorization", v.tokenGiven)
-		handler.ServeHTTP(rr, req)
+		router.ServeHTTP(rr, req)
 
 		responseMap := make(map[string]interface{})
 		err = json.Unmarshal(rr.Body.Bytes(), &responseMap)
@@ -444,16 +436,16 @@ func TestUpdateUser(t *testing.T) {
 }
 
 func TestDeleteUser(t *testing.T) {
-	err := RefreshUserTable()
+	err := RefreshTables()
 	OnError(err, "Error refreshing users table")
 	users, err := SeedUsers()
 	OnError(err, fmt.Sprintf("Error seeding user: %v\n", err))
 	managerUser := users[0]
 	technicianUser := users[2]
-	managerToken, err := server.SignIn(managerUser.Email, "password")
+	managerToken, err := SignIn(managerUser.Email, "password")
 	OnError(err, fmt.Sprintf("Cannot login as manager: %v\n", err))
 	ManagerTokenString := fmt.Sprintf("Bearer %v", managerToken)
-	technicianToken, err := server.SignIn(technicianUser.Email, "password")
+	technicianToken, err := SignIn(technicianUser.Email, "password")
 	OnError(err, fmt.Sprintf("Cannot login as technician: %v\n", err))
 	TechnicianTokenString := fmt.Sprintf("Bearer %v", technicianToken)
 
@@ -488,14 +480,14 @@ func TestDeleteUser(t *testing.T) {
 			id:           strconv.Itoa(int(managerUser.ID)),
 			tokenGiven:   "",
 			statusCode:   401,
-			errorMessage: "unauthorized",
+			errorMessage: "token contains an invalid number of segments",
 		},
 		{
 			// When incorrect token is given
 			id:           strconv.Itoa(int(managerUser.ID)),
 			tokenGiven:   "This is an incorrect token",
 			statusCode:   401,
-			errorMessage: "unauthorized",
+			errorMessage: "token contains an invalid number of segments",
 		},
 		{
 			id:         "unknwon",
@@ -505,13 +497,12 @@ func TestDeleteUser(t *testing.T) {
 	}
 
 	for _, v := range sample {
-		req, err := http.NewRequest("GET", "/users", nil)
-		OnError(err, fmt.Sprintf("Error on GET /users: %v", err))
-		req = mux.SetURLVars(req, map[string]string{"id": v.id})
+		router := SetupRouter()
 		rr := httptest.NewRecorder()
-		handler := http.HandlerFunc(server.DeleteUser)
+		req, err := http.NewRequest("DELETE", "/users/"+v.id, nil)
+		OnError(err, fmt.Sprintf("Error on DELETE /users/id: %v", err))
 		req.Header.Set("Authorization", v.tokenGiven)
-		handler.ServeHTTP(rr, req)
+		router.ServeHTTP(rr, req)
 
 		assert.Equal(t, rr.Code, v.statusCode)
 		if v.statusCode == 401 && v.errorMessage != "" {

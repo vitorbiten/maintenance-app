@@ -1,4 +1,4 @@
-package rabbitmqAdapter
+package adapters
 
 import (
 	"context"
@@ -53,8 +53,9 @@ var PublishMessages = func(messages []map[string]interface{}, controller string)
 			false,  // mandatory
 			false,  // immediate
 			amqp.Publishing{
-				ContentType: "text/plain",
-				Body:        []byte(jsonMessage),
+				DeliveryMode: 2,
+				ContentType:  "text/plain",
+				Body:         []byte(jsonMessage),
 				Headers: map[string]interface{}{
 					"controller": controller,
 				},

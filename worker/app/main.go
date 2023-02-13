@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
 	_ "github.com/joho/godotenv/autoload"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/vitorbiten/maintenance/worker/app/controllers"
+	"golang.org/x/sync/errgroup"
 )
 
 func failOnError(err error, msg string) {
@@ -56,7 +61,7 @@ func main() {
 	failOnError(err, "Failed to declare a queue")
 
 	err = ch.Qos(
-		1,     // prefetch count
+		10,    // prefetch count
 		0,     // prefetch size
 		false, // global
 	)
@@ -73,17 +78,45 @@ func main() {
 	)
 	failOnError(err, "Failed to register a consumer")
 
-	var forever chan struct{}
+	mainCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	closeNotifier := conn.NotifyClose(make(chan *amqp.Error))
+	g, gCtx := errgroup.WithContext(mainCtx)
 
-	go func() {
-		for d := range msgs {
-			incomingController := d.Headers["controller"].(string)
-			failOnError(err, "Controller not found")
-			controllersMap[incomingController](d)
+	var processingWg sync.WaitGroup
+
+	g.Go(func() error {
+		select {
+		case <-closeNotifier:
+			log.Println("RabbitMQ connection closed")
+			stop()
+			return nil
+		case <-gCtx.Done():
+			log.Println("Shutting down server...")
+			return gCtx.Err()
 		}
-	}()
+	})
+	g.Go(func() error {
+		for d := range msgs {
+			select {
+			case <-gCtx.Done():
+				return gCtx.Err()
+			default:
+				incomingController := d.Headers["controller"].(string)
+				failOnError(err, "Controller not found")
+				processingWg.Add(1)
+				go func(d amqp.Delivery) {
+					defer processingWg.Done()
+					controllersMap[incomingController](d)
+				}(d)
+			}
+		}
+		return nil
+	})
 
-	log.Println("-------------- Maintenance Worker -------------")
-	log.Printf(" [*] Waiting for messages.")
-	<-forever
+	log.Printf(" [*] Waiting for messages...")
+	<-gCtx.Done()
+	log.Println("Awaiting final messages...")
+	processingWg.Wait()
+	conn.Close()
 }

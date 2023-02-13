@@ -43,7 +43,6 @@ getting notified when new ones arrive. I hope you like it!
   - [Setup](#-setup)
   - [CI](#-cd)
   - [CD](#-ci)
-- [Repository Visualization](#-repository-visualization)
   
 # Introduction
 
@@ -169,6 +168,18 @@ Then, run this command to start the development servers with docker-compose:
 
 ```shell
 make run
+```
+
+Install Sql-Migrate
+
+```shell
+go get -v github.com/rubenv/sql-migrate/...
+```
+
+Then run the migration:
+
+```shell
+make migrate-up
 ```
 
 If all goes well, you should see this:
@@ -377,10 +388,5 @@ The third action "Build and Deploy" ([build-deploy.yml](/.github/workflows/build
 On a new tag created, it builds the image using this tag, pushes it to Dockerhub and applies the new deployment on the cluster.
 
 ### Check out the production api [here!](http://139.144.159.246/)
-
-# 🗺 Repository Visualization	
-<div align="center">
-  <img src="https://user-images.githubusercontent.com/31265908/215409850-c87598f1-a273-4b69-a619-b3792293d086.png" alt="Repository Visualization"/>
-</div>
 
 **[⬆ back to top](#contents)**

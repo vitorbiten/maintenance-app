@@ -5,10 +5,10 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
+	"github.com/vitorbiten/maintenance/api/app/adapters"
 	"github.com/vitorbiten/maintenance/api/app/auth"
 	"github.com/vitorbiten/maintenance/api/app/models"
-	"github.com/vitorbiten/maintenance/api/app/responses"
-	"github.com/vitorbiten/maintenance/api/app/utils"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -22,37 +22,36 @@ import (
 //	@Success		200	{object}	models.User
 //	@Failure		422	{object}	nil
 //	@Router			/login [post]
-func (server *Server) Login(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
+func Login(context *gin.Context) {
+	body, err := io.ReadAll(context.Request.Body)
 	if err != nil {
-		responses.ERROR(w, http.StatusUnprocessableEntity, err)
+		context.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
 	user := models.User{}
 	err = json.Unmarshal(body, &user)
 	if err != nil {
-		responses.ERROR(w, http.StatusUnprocessableEntity, err)
+		context.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
 	user.Prepare()
 	err = user.Validate("login")
 	if err != nil {
-		responses.ERROR(w, http.StatusUnprocessableEntity, err)
+		context.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
-	token, err := server.SignIn(user.Email, user.Password)
+	token, err := SignIn(user.Email, user.Password)
 	if err != nil {
-		formattedError := utils.FormatDBError(err.Error())
-		responses.ERROR(w, http.StatusUnprocessableEntity, formattedError)
+		context.JSON(http.StatusUnprocessableEntity, gin.H{"error": "incorrect details"})
 		return
 	}
-	responses.JSON(w, http.StatusOK, token)
+
+	context.JSON(http.StatusOK, token)
 }
 
-func (server *Server) SignIn(email, password string) (string, error) {
+func SignIn(email, password string) (string, error) {
 	user := models.User{}
-
-	err := server.DB.Debug().Model(models.User{}).Where("email = ?", email).Take(&user).Error
+	_, err := user.FindUserByEmail(adapters.DB, email)
 	if err != nil {
 		return "", err
 	}

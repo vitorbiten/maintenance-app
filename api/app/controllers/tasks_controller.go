@@ -102,7 +102,7 @@ func CreateTask(context *gin.Context) {
 	}
 	err = tx.Commit()
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -147,7 +147,7 @@ func GetTasks(context *gin.Context) {
 		}
 		err = tx.Commit()
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -160,7 +160,7 @@ func GetTasks(context *gin.Context) {
 		}
 		err = tx.Commit()
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -218,7 +218,7 @@ func GetTask(context *gin.Context) {
 	}
 	err = tx.Commit()
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -302,7 +302,7 @@ func UpdateTask(context *gin.Context) {
 	}
 	err = tx.Commit()
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -361,7 +361,7 @@ func DeleteTask(context *gin.Context) {
 	}
 	err = tx.Commit()
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

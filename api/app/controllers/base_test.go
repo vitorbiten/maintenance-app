@@ -41,7 +41,10 @@ func SetupRouter() *gin.Engine {
 
 func Database() {
 	adapters.LoadTestDatabase()
-	MigrateDB()
+	err := MigrateDB()
+	if err != nil {
+		log.Fatalf("cannot migrate db: %s", err)
+	}
 }
 
 func MigrateDB() error {

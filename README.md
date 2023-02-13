@@ -176,10 +176,22 @@ Install Sql-Migrate
 go get -v github.com/rubenv/sql-migrate/...
 ```
 
+Run the following command to export .env variables:
+
+```shell
+export $(cat .env | egrep -v "(^#.*|^$)" | xargs)
+```
+
 Then run the migration:
 
 ```shell
 make migrate-up
+```
+
+If you get "sql-migrate: No such file or directory", you may need to add $GOPATH/bin to $PATH:
+
+```shell
+export PATH=$(go env GOPATH)/bin:$PATH
 ```
 
 If all goes well, you should see this:

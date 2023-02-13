@@ -1,6 +1,3 @@
-include .env
-export
-
 ## Development:
 env: ## Copies .env.example files
 	cp .env.example .env

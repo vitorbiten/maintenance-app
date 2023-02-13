@@ -93,7 +93,7 @@ func GetUsers(context *gin.Context) {
 	}
 	err = tx.Commit()
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -152,7 +152,7 @@ func GetUser(context *gin.Context) {
 	}
 	err = tx.Commit()
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

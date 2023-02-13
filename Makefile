@@ -29,7 +29,6 @@ create:
 
 ## Test:
 test: ## Run the tests on the project
-	clear
 	docker-compose -f docker-compose.test.yml -p test up --build -d
 	CGO_ENABLED=0 GOOS=linux go test -coverpkg ./api/... ./api/app/...
 	docker-compose -f docker-compose.test.yml -p test down

@@ -1,0 +1,33 @@
+name: Deploy K8s
+on: workflow_dispatch
+jobs:
+  deploy-k8s:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+      - name: login to dockerhub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Kubernetes set context
+        uses: Azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
+      - name: Kubernetes apply
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/master/deploy/local-path-storage.yaml
+          kubectl apply -f https://github.com/rabbitmq/cluster-operator/releases/latest/download/cluster-operator.yml
+          kubectl apply -f ./kubernetes/load-balancer.yaml
+          sed -i'' -e 's,/maintenance-api,/maintenance-api:${{github.ref_name}},g' ./kubernetes/api.yaml
+          kubectl apply -f ./kubernetes/api.yaml
+          kubectl apply -f ./kubernetes/api-hpa.yaml
+          sed -i'' -e 's,/maintenance-worker,/maintenance-worker:${{github.ref_name}},g' ./kubernetes/worker.yaml
+          kubectl apply -f ./kubernetes/worker.yaml
+          kubectl apply -f ./kubernetes/worker-hpa.yaml
+          kubectl apply -f ./kubernetes/mysql.yaml
+          kubectl apply -f ./kubernetes/mysql-configmap.yaml
+          kubectl apply -f ./kubernetes/rabbitmq.yaml
+

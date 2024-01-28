@@ -1,0 +1,83 @@
+version: "3"
+
+services:
+  maintenance-api:
+    build:
+      context: api
+      dockerfile: Dockerfile
+    container_name: maintenance_api
+    ports:
+      - 8080:8080
+    volumes:
+      - ./api:/app
+    depends_on:
+      - mysql
+    networks:
+      - maintenance
+
+  maintenance-worker:
+    build:
+      context: worker
+      dockerfile: Dockerfile
+    container_name: maintenance_worker
+    ports:
+      - 8081:8080
+    volumes:
+      - ./worker:/app
+    depends_on:
+      - rabbitmq
+    networks:
+      - maintenance
+
+  mysql:
+    image: mysql:5.7
+    container_name: mysql
+    ports:
+      - 3306:3306
+    environment:
+      - MYSQL_ROOT_HOST=${DB_HOST}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+      - MYSQL_DATABASE=${DB_NAME}
+      - MYSQL_ROOT_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - database_mysql:/var/lib/mysql
+    networks:
+      - maintenance
+
+  rabbitmq:
+    image: rabbitmq:3.8-management-alpine
+    container_name: rabbitmq
+    ports:
+      - 5672:5672
+      - 15672:15672
+    volumes:
+      - ~/.docker-conf/rabbitmq/data/:/var/lib/rabbitmq
+      - ~/.docker-conf/rabbitmq/log/:/var/log/rabbitmq
+    restart: always
+    networks:
+      - maintenance
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin
+    depends_on:
+      - mysql
+    environment:
+      - PMA_HOST=${DB_HOST}
+      - PMA_USER=${DB_USER}
+      - PMA_PORT=${DB_PORT}
+      - PMA_PASSWORD=${DB_PASSWORD}
+    ports:
+      - 9090:80
+    restart: always
+    networks:
+      - maintenance
+
+volumes:
+  worker: 
+  database_mysql: 
+
+networks:
+  maintenance:
+    driver: bridge

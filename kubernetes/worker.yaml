@@ -1,0 +1,30 @@
+apiVersion: apps/v1 
+kind: Deployment
+metadata:
+  name: maintenance-worker
+  labels:
+    app: maintenance-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels: 
+      app: maintenance-worker
+  template:
+    metadata:
+      labels:
+        app: maintenance-worker                              
+    spec:
+      containers:
+      - name: maintenance-worker 
+        image: vitorbiten/maintenance-worker
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "100Mi"
+          limits:
+            cpu: "200m"
+            memory: "200Mi"
+        imagePullPolicy: Always
+        envFrom:
+          - secretRef:
+              name: secrets

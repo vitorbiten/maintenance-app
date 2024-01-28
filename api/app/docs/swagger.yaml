@@ -1,0 +1,405 @@
+definitions:
+  models.Date:
+    properties:
+      date:
+        example: "2023-01-27T20:03:44Z"
+        type: string
+    type: object
+  models.Email:
+    properties:
+      email:
+        example: steve@email.com
+        type: string
+    type: object
+  models.Nickname:
+    properties:
+      nickname:
+        example: Steve
+        type: string
+    type: object
+  models.Password:
+    properties:
+      password:
+        example: password
+        type: string
+    type: object
+  models.Summary:
+    properties:
+      summary:
+        example: Task summary
+        type: string
+    type: object
+  models.Task:
+    properties:
+      author_id:
+        example: 3
+        type: integer
+      created_at:
+        example: "2023-01-27T20:03:44Z"
+        type: string
+      date:
+        example: "2023-01-27T20:03:44Z"
+        type: string
+      id:
+        example: 1
+        type: integer
+      summary:
+        example: Task summary
+        type: string
+      updated_at:
+        example: "2023-01-27T20:03:44Z"
+        type: string
+    type: object
+  models.User:
+    properties:
+      created_at:
+        example: "2023-01-27T20:03:44Z"
+        type: string
+      email:
+        example: steve@email.com
+        type: string
+      id:
+        example: 1
+        type: integer
+      nickname:
+        example: Steve
+        type: string
+      password:
+        example: password
+        type: string
+      updated_at:
+        example: "2023-01-27T20:03:44Z"
+        type: string
+      user_type:
+        example: technician
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /login:
+    post:
+      parameters:
+      - description: user email
+        in: body
+        name: email
+        required: true
+        schema:
+          $ref: '#/definitions/models.Email'
+      - description: user password
+        in: body
+        name: password
+        required: true
+        schema:
+          $ref: '#/definitions/models.Password'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.User'
+        "422":
+          description: Unprocessable Entity
+      summary: Creates an auth token
+      tags:
+      - login
+  /tasks:
+    get:
+      description: 'Managers can: get all tasks'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Task'
+            type: array
+        "401":
+          description: Unauthorized
+        "404":
+          description: Not Found
+        "500":
+          description: Internal Server Error
+      summary: Get tasks
+      tags:
+      - tasks
+    post:
+      description: 'Technicians can: create tasks'
+      parameters:
+      - description: 'task summary (max length: 2500)'
+        in: body
+        name: summary
+        required: true
+        schema:
+          $ref: '#/definitions/models.Summary'
+      - description: task date
+        in: body
+        name: date
+        schema:
+          $ref: '#/definitions/models.Date'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Task'
+        "401":
+          description: Unauthorized
+        "404":
+          description: Not Found
+        "422":
+          description: Unprocessable Entity
+        "500":
+          description: Internal Server Error
+      summary: Creates a task
+      tags:
+      - tasks
+  /tasks/id:
+    delete:
+      consumes:
+      - application/json
+      description: 'Managers can: delete all tasks'
+      parameters:
+      - description: task id
+        in: query
+        name: id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+        "401":
+          description: Unauthorized
+        "404":
+          description: Not Found
+      summary: Deletes a task by id
+      tags:
+      - tasks
+    get:
+      consumes:
+      - application/json
+      description: |-
+        Managers can: get all tasks
+        Technicians can: get only their tasks
+      parameters:
+      - description: task id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Task'
+        "400":
+          description: Bad Request
+        "401":
+          description: Unauthorized
+        "404":
+          description: Not Found
+        "500":
+          description: Internal Server Error
+      summary: Get task by id
+      tags:
+      - tasks
+    put:
+      consumes:
+      - application/json
+      description: 'Technicians can: update only their tasks'
+      parameters:
+      - description: task id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 'task summary (max length: 2500)'
+        in: body
+        name: summary
+        required: true
+        schema:
+          $ref: '#/definitions/models.Summary'
+      - description: task date
+        in: body
+        name: date
+        schema:
+          $ref: '#/definitions/models.Date'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Task'
+        "400":
+          description: Bad Request
+        "401":
+          description: Unauthorized
+        "404":
+          description: Not Found
+        "422":
+          description: Unprocessable Entity
+        "500":
+          description: Internal Server Error
+      summary: Updates task by id
+      tags:
+      - tasks
+  /users:
+    get:
+      description: 'Managers can: get all technician users'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.User'
+            type: array
+        "400":
+          description: Bad Request
+        "401":
+          description: Unauthorized
+        "500":
+          description: Internal Server Error
+      summary: Returns all technician users
+      tags:
+      - users
+    post:
+      description: 'Technicians can: create users'
+      parameters:
+      - description: user nickname
+        in: body
+        name: nickname
+        required: true
+        schema:
+          $ref: '#/definitions/models.Nickname'
+      - description: user email
+        in: body
+        name: email
+        required: true
+        schema:
+          $ref: '#/definitions/models.Email'
+      - description: user password
+        in: body
+        name: password
+        required: true
+        schema:
+          $ref: '#/definitions/models.Password'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.User'
+        "422":
+          description: Unprocessable Entity
+        "500":
+          description: Internal Server Error
+      summary: Creates a user
+      tags:
+      - users
+  /users/id:
+    delete:
+      consumes:
+      - application/json
+      description: |-
+        Managers can: delete themselves
+        Technicians can: delete themselves
+      parameters:
+      - description: user id
+        in: query
+        name: id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+        "401":
+          description: Unauthorized
+      summary: Deletes a user by id
+      tags:
+      - users
+    get:
+      description: |-
+        Managers can: get all technician users and themselves
+        Technicians can: get themselves
+      parameters:
+      - description: user id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.User'
+        "400":
+          description: Bad Request
+        "401":
+          description: Unauthorized
+        "404":
+          description: Not Found
+        "500":
+          description: Internal Server Error
+      summary: Returns an user
+      tags:
+      - users
+    put:
+      description: 'Technicians can: update their tasks'
+      parameters:
+      - description: user id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: user nickname
+        in: body
+        name: nickname
+        required: true
+        schema:
+          $ref: '#/definitions/models.Nickname'
+      - description: user email
+        in: body
+        name: email
+        required: true
+        schema:
+          $ref: '#/definitions/models.Email'
+      - description: user password
+        in: body
+        name: password
+        required: true
+        schema:
+          $ref: '#/definitions/models.Password'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.User'
+        "400":
+          description: Bad Request
+        "401":
+          description: Unauthorized
+        "500":
+          description: Internal Server Error
+      summary: Updates an user by id
+      tags:
+      - users
+swagger: "2.0"

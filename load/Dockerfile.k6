@@ -1,0 +1,8 @@
+FROM grafana/k6:latest
+
+# Copy the k6.js script into the image from the correct location
+COPY ./scripts/k6.js /scripts/
+
+# Adjust permissions for k6.js
+USER root
+RUN chmod +rx /scripts/k6.js

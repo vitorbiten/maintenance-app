@@ -1,0 +1,25 @@
+name: Lint and Test
+on:
+  pull_request:
+    branches: [ "main" ]
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - run: make lint
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    env:
+      API_SECRET: dRgUkXp2s5v8x/A?D(G+KbPeShVmYq3t
+      TEST_DB_HOST: localhost
+      TEST_DB_USER: user
+      TEST_DB_PASSWORD: password
+      TEST_DB_NAME: maintenance_api_test
+      TEST_DB_PORT: 3306
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - run: make test

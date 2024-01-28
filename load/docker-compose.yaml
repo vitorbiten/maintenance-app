@@ -1,0 +1,33 @@
+version: '3.4'
+
+services:
+  influxdb:
+    image: influxdb:1.8
+    network_mode: "host"
+    environment:
+      - INFLUXDB_DB=k6
+
+  grafana:
+    build:
+      context: .
+      dockerfile: Dockerfile.grafana
+    network_mode: "host"
+    environment:
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_BASIC_ENABLED=false
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+    volumes:
+      - ./dashboards:/var/lib/grafana/dashboards
+      - ./grafana-dashboard.yaml:/etc/grafana/provisioning/dashboards/dashboard.yaml
+      - ./grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml
+
+  k6:
+    build:
+      context: .
+      dockerfile: Dockerfile.k6
+    network_mode: "host"
+    environment:
+      - K6_OUT=influxdb=http://127.0.0.1:8086/k6
+    volumes:
+      - ./scripts:/scripts

@@ -1,0 +1,6 @@
+FROM grafana/grafana:7.5.5
+
+# Adjust permissions for dashboards directory
+USER root
+RUN mkdir -p /var/lib/grafana/dashboards 
+RUN chmod +rx /var/lib/grafana/dashboards

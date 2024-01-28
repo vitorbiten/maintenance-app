@@ -1,0 +1,18 @@
+version: '3'
+
+services:
+  mysql-test:
+    image: mysql
+    container_name: mysql_test    
+    environment: 
+      - MYSQL_ROOT_HOST=${TEST_DB_HOST} 
+      - MYSQL_USER=${TEST_DB_USER}
+      - MYSQL_PASSWORD=${TEST_DB_PASSWORD}
+      - MYSQL_DATABASE=${TEST_DB_NAME}
+      - MYSQL_ROOT_PASSWORD=${TEST_DB_PASSWORD}
+    volumes:
+      - database_mysql_test:/var/lib/mysql
+    network_mode: "host"
+  
+volumes:
+  database_mysql_test:

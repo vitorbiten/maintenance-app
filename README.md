@@ -26,14 +26,18 @@ This project is a simple multi-tier web application designed to showcase DevOps 
 
 ## About
 
+The backend API is a maintenance tasks management system that has two entities, users and tasks. 
+
 The task summary can contain up to 2500 characters of personal information, so it's encrypted with an aes 256 symmetric key.
 It also contains the date when it was performed, the default will be now() if not informed.
 
 When the task is created in the API, a message with the technician's nickname, task id, task date and manager email will be sent through rabbitmq to a Worker.
-If there's more than one manager then mutiple messages will be sent.
+If there's more than one manager then mutiple messages will be sent, the messages then can be used by the worker to perform any action like sending a notification.
 
 Users need to be authenticated to perform actions, the api comes with basic user routes and the token id is checked thoroughly.
-    
+
+The API serves as good development base with authentication, messaging, gracefull shutdown, data validation, hot reloading and many tools and features for a development environment. 
+
 ## Permissions Map
 
 <div align="center">
@@ -128,7 +132,7 @@ The project can be hosted locally through docker-compose using the following res
 
 It uses [Air](https://github.com/cosmtrek/air) for hot-reloading, for more info check [docker-compose.yml](/docker-compose.yml).
 
-It can be also be hosted on a [local kubernetes](#-kubernetes) cluster with the standart kubernetes dashboard.
+It can be also be hosted on a [local kubernetes](#kubernetes) cluster with the standart kubernetes dashboard.
 
 ## Prerequisites
 
@@ -281,7 +285,7 @@ The command minikube docker-env returns a set of Bash environment variable expor
 make deploy
 ```
 
-It will start minikube, connect the Docker CLI to the docker daemon inside the minikube VM, then kubectl apply these external configs:
+It will start minikube, setup the metrics-server for scalability control, then kubectl apply these external configs:
 
 - [Kubernetes Dashboard](https://kubernetes.io/docs/tasks/access-application-cluster/web-ui-dashboard/)
 - [Local Path Provisioner](https://github.com/rancher/local-path-provisioner)
@@ -361,17 +365,16 @@ This action needs to be triggered manually and be ran from a tag version so the 
 
 ## CI
 
-The second action "Lint and Test" ([lint-test.yml](/.github/workflows/lint-test.yml)) has three steps:
+The second action "Lint and Test" ([lint-test.yml](/.github/workflows/lint-test.yml)) has two steps:
 
-It runs the lint, tests suite, and then in case of a push/merge to main, [Github Tag Action](https://github.com/anothrNick/github-tag-action) bumps 
-the version using #major, #minor (default), #patch or #none tags in the commit message. After the bump a tag is created, triggering the Build and Deploy workflow.
+It runs the lint and test suite when a pull requested is created.
 
 ## CD	
 
 The third action "Deploy Pipeline" ([lint-test-bump-build-deploy.yml](/.github/workflows/lint-test-bump-build-deploy.yml)) has five steps:
 
 In case of a push/merge to main, the lint and tests are ran, [Github Tag Action](https://github.com/anothrNick/github-tag-action) bumps 
-the version using #major, #minor (default), #patch or #none tags in the commit message. After the bump a tag is created, it Builds and Deploy to the K8s.
+the version using #major, #minor (default), #patch or #none tags in the commit message. After the bump a tag is created, it Builds the image and Deploy to the K8s.
 
 ### Check out the production api [here!](http://139.144.247.5/)
 
